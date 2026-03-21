@@ -29,21 +29,21 @@ Phase 1 完成（数据库就绪、Docker 运行正常、核心库可用）
 | `DELETE` | `/api/samples/[id]` | 删除样本 |
 
 - 图片上传使用 `src/lib/storage.ts` 的 LocalStorage 实现
-- `POST` 成功后自动向 BullMQ 发送 `sample:analyze` 任务
+- `POST` 成功后自动向 BullMQ 发送 `sample-analyze` 任务
 - `source_url` 重复时返回 409 错误
 
 ### 2. BullMQ Worker 实现
 
 在 `src/worker.ts` 中实现两个队列处理器：
 
-**`sample:analyze` 队列**：
+**`sample-analyze` 队列**：
 1. 调用 LLM（GPT-4o Vision 端到端）分析样本文本 → 输出符合 `analysisSchema` 的 JSON
 2. 如果有图片，调用多模态模型分析封面 → 输出符合 `visualAnalysisSchema` 的 JSON（含 `extracted_text`）
 3. 将分析结果写入 `sample_analysis` + `sample_visual_analysis` 表
 4. 更新 `sample.status` 为 `analyzed`
-5. 分析完成后自动向 `sample:embed` 队列发送任务
+5. 分析完成后自动向 `sample-embed` 队列发送任务
 
-**`sample:embed` 队列**：
+**`sample-embed` 队列**：
 1. 为样本生成 embedding（title + body 拼接后生成一个 embedding）
 2. 写入 `sample_embeddings` 表
 3. 更新 `sample.status` 为 `reviewed`

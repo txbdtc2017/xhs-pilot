@@ -1342,17 +1342,29 @@ services:
     ports: ["3000:3000"]
     depends_on: [postgres, redis]
     env_file: .env
+    environment:               # Docker 内覆盖 .env 的 localhost 默认值
+      - DB_HOST=postgres
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=production
     volumes: [uploads:/app/uploads]
 
   worker:                      # 异步任务处理
     build: .
-    command: node worker.js
+    command: npx tsx src/worker.ts
     depends_on: [postgres, redis]
     env_file: .env
+    environment:
+      - DB_HOST=postgres
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=production
     volumes: [uploads:/app/uploads]
 
   postgres:                    # 数据库（含 pgvector）
     image: pgvector/pgvector:pg16
+    environment:
+      - POSTGRES_USER=xhs_pilot
+      - POSTGRES_PASSWORD=change-me
+      - POSTGRES_DB=xhs_pilot
     volumes: [pgdata:/var/lib/postgresql/data]
 
   redis:                       # 任务队列
@@ -1379,12 +1391,13 @@ volumes:
 
 ```bash
 # ===== 应用 =====
-NODE_ENV=production
+NODE_ENV=development
 APP_URL=http://localhost:3000
 APP_SECRET=your-random-secret
 
 # ===== 数据库 =====
-DB_HOST=postgres
+# 本地开发用 localhost，Docker Compose 中会通过 compose 环境覆盖为 postgres
+DB_HOST=localhost
 DB_PORT=5432
 DB_USER=xhs_pilot
 DB_PASSWORD=change-me
@@ -1392,10 +1405,11 @@ DB_NAME=xhs_pilot
 DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
 
 # ===== Redis =====
-REDIS_URL=redis://redis:6379
+# 本地开发用 localhost，Docker Compose 中会通过 compose 环境覆盖为 redis
+REDIS_URL=redis://localhost:6379
 
 # ===== LLM（厂商解耦，支持任意 OpenAI 兼容 API） =====
-# 支持：OpenAI / 中转代理 / Ollama（http://host.docker.internal:11434/v1）/ DeepSeek / etc.
+# 支持：OpenAI / 中转代理 / Ollama（http://localhost:11434/v1）/ DeepSeek / etc.
 LLM_API_KEY=sk-xxx
 LLM_BASE_URL=https://api.openai.com/v1
 LLM_MODEL_ANALYSIS=gpt-4o              # 分析用模型
@@ -1424,9 +1438,16 @@ ANALYSIS_CONCURRENCY=2
 LOG_LEVEL=info
 ```
 
+> [!IMPORTANT]
+> **运行模式说明**：
+> - **本地开发**（`npm run dev` + 本地 PG/Redis）：直接使用 `.env` 的默认值（`localhost`）
+> - **Docker Compose**（`docker compose up`）：在 `docker-compose.yml` 的 `environment` 中覆盖 `DB_HOST=postgres`、`REDIS_URL=redis://redis:6379`，**不改 `.env` 文件**
+>
+> 这样同一份 `.env` 在两种模式下都可用。
+
 > [!TIP]
 > **LLM 厂商解耦设计**：通过 Vercel AI SDK 的 `createOpenAI()` 工厂函数，传入 `LLM_BASE_URL` 和 `LLM_API_KEY` 创建客户端。开源用户只需修改这两个变量即可接入：
-> - **Ollama 本地模型**：`LLM_BASE_URL=http://host.docker.internal:11434/v1`, `LLM_MODEL_ANALYSIS=qwen2.5`
+> - **Ollama 本地模型**：`LLM_BASE_URL=http://localhost:11434/v1`（Docker 中为 `http://host.docker.internal:11434/v1`）
 > - **DeepSeek**：`LLM_BASE_URL=https://api.deepseek.com`, `LLM_API_KEY=sk-xxx`
 > - **中转代理**：`LLM_BASE_URL=https://your-proxy.com/v1`
 > - Embedding 同理，可独立配置不同服务商
@@ -1457,9 +1478,9 @@ migrations/
 
 | 队列 | 触发时机 | 处理内容 |
 |------|----------|----------|
-| `sample:analyze` | 样本录入后 | GPT-4o Vision 端到端分析（含 OCR） |
-| `sample:embed` | 分析完成后 | 生成 embedding 向量 |
-| `style:summarize` | 画像样本变更后 | 汇总画像规则 |
+| `sample-analyze` | 样本录入后 | GPT-4o Vision 端到端分析（含 OCR） |
+| `sample-embed` | 分析完成后 | 生成 embedding 向量 |
+| `style-summarize` | 画像样本变更后 | 汇总画像规则 |
 
 > [!IMPORTANT]
 > **创作生成不走 BullMQ**。策略制定和内容生成直接在 API Route 中通过 Vercel AI SDK 流式调用 LLM，实现打字机效果。这是快慢分离原则的具体体现（见 3.2 节）。
@@ -1536,7 +1557,7 @@ xhs-pilot/
 ├── .env.example
 ├── package.json
 ├── next.config.js
-├── worker.js                      # BullMQ Worker 入口（仅慢任务）
+├── worker.ts                      # BullMQ Worker 入口（仅慢任务，用 tsx 运行）
 │
 ├── migrations/                    # 数据库迁移文件
 │

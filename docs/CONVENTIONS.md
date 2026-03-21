@@ -126,8 +126,8 @@ import { Pool } from 'pg';
 export const pool: Pool;
 
 // 通用查询辅助
-export async function query<T>(text: string, params?: any[]): Promise<T[]>;
-export async function queryOne<T>(text: string, params?: any[]): Promise<T | null>;
+export async function query<T>(text: string, params?: unknown[]): Promise<T[]>;
+export async function queryOne<T>(text: string, params?: unknown[]): Promise<T | null>;
 
 // Phase 3 新增
 export async function searchSimilarSamples(params: {
@@ -185,8 +185,8 @@ export const logger: pino.Logger;
 ```typescript
 import { Queue } from 'bullmq';
 
-export const analyzeQueue: Queue;  // sample:analyze
-export const embedQueue: Queue;    // sample:embed
+export const analyzeQueue: Queue;  // sample-analyze
+export const embedQueue: Queue;    // sample-embed
 ```
 
 ---
