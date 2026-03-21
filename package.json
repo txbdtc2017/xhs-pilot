@@ -3,15 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 17789",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --port 17789",
     "lint": "eslint",
-    "worker:dev": "tsx watch src/worker.ts",
-    "worker:start": "tsx src/worker.ts",
-    "db:migrate": "node-pg-migrate up",
-    "db:migrate:down": "node-pg-migrate down",
-    "seed": "bash scripts/seed.sh"
+    "worker:dev": "sh scripts/with-env.sh tsx watch src/worker.ts",
+    "worker:start": "sh scripts/with-env.sh tsx src/worker.ts",
+    "db:migrate": "sh scripts/with-env.sh node-pg-migrate up",
+    "db:migrate:down": "sh scripts/with-env.sh node-pg-migrate down",
+    "seed": "sh scripts/with-env.sh sh scripts/seed.sh"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.47",

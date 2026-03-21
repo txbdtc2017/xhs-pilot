@@ -1,3 +1,4 @@
+-- Up Migration
 CREATE TABLE IF NOT EXISTS sample_visual_analysis (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sample_id       UUID UNIQUE REFERENCES samples(id) ON DELETE CASCADE,
@@ -18,3 +19,6 @@ CREATE TABLE IF NOT EXISTS sample_visual_analysis (
   model_name    TEXT,
   analyzed_at   TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Down Migration
+DROP TABLE IF EXISTS sample_visual_analysis;

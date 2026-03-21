@@ -1,17 +1,16 @@
 import { Pool } from 'pg';
+import { resolveDatabaseUrl } from './env';
 import { logger } from './logger';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+export const pool = new Pool({
+  connectionString: resolveDatabaseUrl(process.env),
 });
 
 pool.on('error', (err) => {
   logger.error({ err }, 'Unexpected error on idle client');
 });
 
-export { pool };
-
-export async function query<T>(text: string, params?: any[]): Promise<T[]> {
+export async function query<T>(text: string, params?: unknown[]): Promise<T[]> {
   const start = Date.now();
   try {
     const res = await pool.query(text, params);
@@ -24,7 +23,7 @@ export async function query<T>(text: string, params?: any[]): Promise<T[]> {
   }
 }
 
-export async function queryOne<T>(text: string, params?: any[]): Promise<T | null> {
+export async function queryOne<T>(text: string, params?: unknown[]): Promise<T | null> {
   const rows = await query<T>(text, params);
   return rows.length > 0 ? rows[0] : null;
 }

@@ -1,0 +1,10 @@
+{
+  "name": "XHS Pilot",
+  "short_name": "XHS Pilot",
+  "description": "Phase 1 scaffold for the XHS Pilot project.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#ff2442",
+  "icons": []
+}

@@ -1,3 +1,4 @@
+-- Up Migration
 CREATE TABLE IF NOT EXISTS generation_tasks (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   topic             TEXT NOT NULL,
@@ -10,3 +11,6 @@ CREATE TABLE IF NOT EXISTS generation_tasks (
   status            TEXT DEFAULT 'pending',
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Down Migration
+DROP TABLE IF EXISTS generation_tasks;

@@ -1,3 +1,4 @@
+-- Up Migration
 CREATE TABLE IF NOT EXISTS task_feedback (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id               UUID REFERENCES generation_tasks(id) ON DELETE CASCADE,
@@ -8,3 +9,6 @@ CREATE TABLE IF NOT EXISTS task_feedback (
   manual_feedback       TEXT,
   created_at            TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Down Migration
+DROP TABLE IF EXISTS task_feedback;

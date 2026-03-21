@@ -1,7 +1,8 @@
 import { createOpenAI } from '@ai-sdk/openai';
+import { resolveEnvValue } from './env';
 
-const apiKey = process.env.LLM_API_KEY;
-const baseURL = process.env.LLM_BASE_URL;
+const apiKey = resolveEnvValue(process.env.LLM_API_KEY);
+const baseURL = resolveEnvValue(process.env.LLM_BASE_URL);
 
 const openai = createOpenAI({
   apiKey,
@@ -9,8 +10,8 @@ const openai = createOpenAI({
 });
 
 const embeddingOpenAI = createOpenAI({
-  apiKey: process.env.EMBEDDING_API_KEY || apiKey,
-  baseURL: process.env.EMBEDDING_BASE_URL || baseURL,
+  apiKey: resolveEnvValue(process.env.EMBEDDING_API_KEY, apiKey),
+  baseURL: resolveEnvValue(process.env.EMBEDDING_BASE_URL, baseURL),
 });
 
 // These are the clients (factories)

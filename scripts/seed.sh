@@ -1,6 +1,6 @@
-#!/bin/bash
-# scripts/seed.sh
+#!/bin/sh
+
+set -eu
 
 echo "Seeding initial samples..."
-npx tsx scripts/seed.ts
-echo "Done!"
+tsx scripts/seed.ts

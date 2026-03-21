@@ -1,3 +1,4 @@
+-- Up Migration
 CREATE TABLE IF NOT EXISTS task_strategy (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id             UUID UNIQUE REFERENCES generation_tasks(id) ON DELETE CASCADE,
@@ -10,3 +11,6 @@ CREATE TABLE IF NOT EXISTS task_strategy (
   warnings            TEXT[],
   created_at          TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Down Migration
+DROP TABLE IF EXISTS task_strategy;

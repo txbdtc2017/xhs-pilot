@@ -1,24 +1,24 @@
 import { Worker, Job } from 'bullmq';
-import { redis } from '@/lib/redis';
+import { redis, redisConnection } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 
 logger.info('Starting BullMQ Workers...');
 
-const analyzeWorker = new Worker('sample:analyze', async (job: Job) => {
+const analyzeWorker = new Worker('sample-analyze', async (job: Job) => {
   logger.info({ jobId: job.id, data: job.data }, 'Processing analyze job');
   // TODO: Implement Analysis Agent in Phase 2
   return { status: 'analyzed' };
 }, {
-  connection: redis as any,
+  connection: redisConnection,
   concurrency: Number(process.env.ANALYSIS_CONCURRENCY) || 2,
 });
 
-const embedWorker = new Worker('sample:embed', async (job: Job) => {
+const embedWorker = new Worker('sample-embed', async (job: Job) => {
   logger.info({ jobId: job.id, data: job.data }, 'Processing embed job');
   // TODO: Implement Embedding in Phase 2
   return { status: 'embedded' };
 }, {
-  connection: redis as any,
+  connection: redisConnection,
 });
 
 analyzeWorker.on('completed', (job) => {
@@ -39,9 +39,18 @@ embedWorker.on('failed', (job, err) => {
 
 logger.info('Workers are ready and listening for jobs.');
 
-process.on('SIGTERM', async () => {
-  logger.info('Shutting down workers...');
+async function shutdown(signal: string) {
+  logger.info({ signal }, 'Shutting down workers...');
   await analyzeWorker.close();
   await embedWorker.close();
+  await redis.quit();
   process.exit(0);
+}
+
+process.on('SIGTERM', async () => {
+  await shutdown('SIGTERM');
+});
+
+process.on('SIGINT', async () => {
+  await shutdown('SIGINT');
 });

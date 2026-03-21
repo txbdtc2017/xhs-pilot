@@ -30,12 +30,14 @@ async function seed() {
         [sample.title, sample.body_text, sample.source_url, sample.manual_tags]
       );
     }
+
     logger.info('Seed data inserted successfully');
-  } catch (err) {
-    logger.error({ err }, 'Seed failed');
   } finally {
     await pool.end();
   }
 }
 
-seed();
+void seed().catch((error: unknown) => {
+  logger.error({ error }, 'Seed failed');
+  process.exit(1);
+});

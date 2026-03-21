@@ -6,8 +6,13 @@
   margin: 0;
 }
 
+html {
+  height: 100%;
+}
+
 html,
 body {
+  min-height: 100%;
   max-width: 100vw;
   overflow-x: hidden;
   font-family: var(--font-family);
@@ -15,6 +20,8 @@ body {
   line-height: var(--line-height-base);
   color: var(--color-text-primary);
   background-color: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {

@@ -1,3 +1,4 @@
+-- Up Migration
 CREATE TABLE IF NOT EXISTS generation_outputs (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id         UUID REFERENCES generation_tasks(id) ON DELETE CASCADE,
@@ -13,3 +14,6 @@ CREATE TABLE IF NOT EXISTS generation_outputs (
   version         INT DEFAULT 1,
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Down Migration
+DROP TABLE IF EXISTS generation_outputs;

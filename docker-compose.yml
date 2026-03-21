@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "17789:17789"
     depends_on:
       postgres:
         condition: service_healthy
@@ -12,6 +12,12 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      APP_URL: http://localhost:17789
+      DB_HOST: postgres
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${DB_USER:-xhs_pilot}:${DB_PASSWORD:-change-me}@postgres:${DB_PORT:-5432}/${DB_NAME:-xhs_pilot}
+      NODE_ENV: production
     volumes:
       - ./uploads:/app/uploads
     restart: always
@@ -20,7 +26,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: npx tsx src/worker.ts
+    command: sh -lc "./scripts/with-env.sh node-pg-migrate up && exec npm run worker:start"
     depends_on:
       postgres:
         condition: service_healthy
@@ -28,6 +34,12 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      APP_URL: http://localhost:17789
+      DB_HOST: postgres
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${DB_USER:-xhs_pilot}:${DB_PASSWORD:-change-me}@postgres:${DB_PORT:-5432}/${DB_NAME:-xhs_pilot}
+      NODE_ENV: production
     volumes:
       - ./uploads:/app/uploads
     restart: always

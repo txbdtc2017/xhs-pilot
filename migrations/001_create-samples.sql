@@ -1,3 +1,4 @@
+-- Up Migration
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "vector";
 
@@ -17,3 +18,8 @@ CREATE TABLE IF NOT EXISTS samples (
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Down Migration
+DROP TABLE IF EXISTS samples;
+DROP EXTENSION IF EXISTS "vector";
+DROP EXTENSION IF EXISTS "pgcrypto";
