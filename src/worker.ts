@@ -1,56 +1,99 @@
-import { Worker, Job } from 'bullmq';
-import { redis, redisConnection } from '@/lib/redis';
-import { logger } from '@/lib/logger';
+import { Worker } from 'bullmq';
+import { pathToFileURL } from 'node:url';
+import { embedMany } from 'ai';
+import { analyzeText, analyzeImage } from './agents/analysis';
+import { query, queryOne } from './lib/db';
+import { llmEmbedding } from './lib/llm';
+import { logger } from './lib/logger';
+import { redisConnection } from './lib/redis';
+import { storage } from './lib/storage';
+import { embedQueue } from './queues';
+import {
+  processAnalyzeJob,
+  processEmbedJob,
+  type AnalyzeJobDependencies,
+  type AnalyzeJobLike,
+  type EmbedJobDependencies,
+} from './worker-jobs';
 
-logger.info('Starting BullMQ Workers...');
-
-const analyzeWorker = new Worker('sample-analyze', async (job: Job) => {
-  logger.info({ jobId: job.id, data: job.data }, 'Processing analyze job');
-  // TODO: Implement Analysis Agent in Phase 2
-  return { status: 'analyzed' };
-}, {
-  connection: redisConnection,
-  concurrency: Number(process.env.ANALYSIS_CONCURRENCY) || 2,
-});
-
-const embedWorker = new Worker('sample-embed', async (job: Job) => {
-  logger.info({ jobId: job.id, data: job.data }, 'Processing embed job');
-  // TODO: Implement Embedding in Phase 2
-  return { status: 'embedded' };
-}, {
-  connection: redisConnection,
-});
-
-analyzeWorker.on('completed', (job) => {
-  logger.info({ jobId: job.id }, 'Analyze job completed');
-});
-
-analyzeWorker.on('failed', (job, err) => {
-  logger.error({ jobId: job?.id, err }, 'Analyze job failed');
-});
-
-embedWorker.on('completed', (job) => {
-  logger.info({ jobId: job.id }, 'Embed job completed');
-});
-
-embedWorker.on('failed', (job, err) => {
-  logger.error({ jobId: job?.id, err }, 'Embed job failed');
-});
-
-logger.info('Workers are ready and listening for jobs.');
-
-async function shutdown(signal: string) {
-  logger.info({ signal }, 'Shutting down workers...');
-  await analyzeWorker.close();
-  await embedWorker.close();
-  await redis.quit();
-  process.exit(0);
+function createAnalyzeJobDependencies(): AnalyzeJobDependencies {
+  return {
+    query,
+    queryOne,
+    analyzeText,
+    analyzeImage,
+    storage,
+    embedQueue,
+    logger,
+  };
 }
 
-process.on('SIGTERM', async () => {
-  await shutdown('SIGTERM');
-});
+function createEmbedJobDependencies(): EmbedJobDependencies {
+  return {
+    query,
+    queryOne,
+    createEmbedding: async (textToEmbed: string) => {
+      const { embeddings } = await embedMany({
+        model: llmEmbedding.textEmbeddingModel(process.env.EMBEDDING_MODEL || 'text-embedding-3-small'),
+        values: [textToEmbed],
+        maxRetries: 3,
+      });
 
-process.on('SIGINT', async () => {
-  await shutdown('SIGINT');
-});
+      return embeddings[0];
+    },
+    logger,
+  };
+}
+
+export let analyzeWorker: Worker<{ sampleId: string }> | undefined;
+export let embedWorker: Worker<{ sampleId: string }> | undefined;
+
+export function startWorkers(): {
+  analyzeWorker: Worker<{ sampleId: string }>;
+  embedWorker: Worker<{ sampleId: string }>;
+} {
+  if (analyzeWorker && embedWorker) {
+    return { analyzeWorker, embedWorker };
+  }
+
+  analyzeWorker = new Worker<{ sampleId: string }>(
+    'sample-analyze',
+    async (job) => {
+      try {
+        await processAnalyzeJob(job as AnalyzeJobLike, createAnalyzeJobDependencies());
+      } catch (error) {
+        logger.error({ error, job: job.id }, 'Analyze job failed');
+        await query('UPDATE samples SET status = $1 WHERE id = $2', ['failed', job.data.sampleId]);
+        throw error;
+      }
+    },
+    { connection: redisConnection },
+  );
+
+  embedWorker = new Worker<{ sampleId: string }>(
+    'sample-embed',
+    async (job) => {
+      try {
+        await processEmbedJob(job as AnalyzeJobLike, createEmbedJobDependencies());
+      } catch (error) {
+        logger.error({ error, job: job.id }, 'Embed job failed');
+        await query('UPDATE samples SET status = $1 WHERE id = $2', ['failed', job.data.sampleId]);
+        throw error;
+      }
+    },
+    { connection: redisConnection },
+  );
+
+  logger.info('Workers started');
+
+  return { analyzeWorker, embedWorker };
+}
+
+function isExecutedDirectly(): boolean {
+  const entryPath = process.argv[1];
+  return typeof entryPath === 'string' && import.meta.url === pathToFileURL(entryPath).href;
+}
+
+if (isExecutedDirectly()) {
+  startWorkers();
+}

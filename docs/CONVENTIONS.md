@@ -166,6 +166,7 @@ export const llmEmbedding: ReturnType<typeof createOpenAI>;   // EMBEDDING_MODEL
 export interface StorageProvider {
   upload(file: Buffer, key: string): Promise<string>;
   getUrl(key: string): string;
+  getBuffer(key: string): Promise<Buffer>;
   delete(key: string): Promise<void>;
 }
 
@@ -264,7 +265,7 @@ logger.error({ error, sampleId }, 'Analysis failed');
 
 | 从 | 到 | 衔接检查 |
 |----|----|----------|
-| Phase 1 | Phase 2 | `db.ts` 导出 `query()` 和 `queryOne()`；`redis.ts` 导出 `redis` 实例；`llm.ts` 导出 4 个客户端；`storage.ts` 有可用的 `upload()`；BullMQ 队列定义在 `queues/index.ts`；Worker 入口文件存在 |
+| Phase 1 | Phase 2 | `db.ts` 导出 `query()` 和 `queryOne()`；`redis.ts` 导出 `redis` 实例；`llm.ts` 导出 4 个客户端；`storage.ts` 有可用的 `upload()` 和 `getBuffer()`；BullMQ 队列定义在 `queues/index.ts`；Worker 入口文件存在 |
 | Phase 2 | Phase 3 | `sample_analysis` 表有数据；`sample_embeddings` 表有向量；样本 API 可正常 CRUD |
 | Phase 3 | Phase 4 | `searchSimilarSamples()` 函数可用且已测试；`taskUnderstandingSchema` 已定义 |
 | Phase 4 | Phase 5 | 创作工作台页面可用；所有 Agent 和 Schema 就位；API 契约已实现 |

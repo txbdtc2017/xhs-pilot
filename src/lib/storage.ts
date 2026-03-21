@@ -5,6 +5,7 @@ import { logger } from './logger';
 export interface StorageProvider {
   upload(file: Buffer, key: string): Promise<string>;
   getUrl(key: string): string;
+  getBuffer(key: string): Promise<Buffer>;
   delete(key: string): Promise<void>;
 }
 
@@ -34,6 +35,16 @@ class LocalStorage implements StorageProvider {
 
   getUrl(key: string): string {
     return `${this.publicUrl}/${key}`;
+  }
+
+  async getBuffer(key: string): Promise<Buffer> {
+    const fullPath = path.join(this.baseDir, key);
+    try {
+      return await fs.readFile(fullPath);
+    } catch (err) {
+      logger.error({ err, key }, 'Failed to read file locally');
+      throw err;
+    }
   }
 
   async delete(key: string): Promise<void> {

@@ -265,7 +265,7 @@ graph TB
 **Step 4：向量化入库**
 - 原始层数据写入 `samples` + `sample_images`
 - 认知层数据写入 `sample_analysis` + `sample_visual_analysis`
-- 生成 embedding 写入 `sample_embeddings`（title / body / analysis 分别生成）
+- 生成一份 `title + body` 联合 embedding，写入 `sample_embeddings`
 
 **Step 5：人工确认/修正**
 - 用户可修正任何自动标签
@@ -543,12 +543,12 @@ CREATE TABLE samples (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title           TEXT NOT NULL,
   body_text       TEXT NOT NULL,
-  source_url      TEXT UNIQUE,           -- Phase 1 防重：同一链接不可重复录入
-  content_hash    TEXT,                  -- Phase 2 防重：标题+正文前200字的 Hash，用于内容级去重
+  source_url      TEXT UNIQUE,           -- Phase 1 & 2 防重：同一链接不可重复录入
+  content_hash    TEXT,                  -- 预留字段，Phase 3+ 再用于内容级去重
   platform        TEXT DEFAULT 'xiaohongshu',
   manual_notes    TEXT,
   manual_tags     TEXT[],                -- 用户手动标签
-  status          TEXT DEFAULT 'draft',  -- draft | analyzed | reviewed
+  status          TEXT DEFAULT 'pending',  -- pending | analyzing | embedding | completed | failed
   is_high_value   BOOLEAN DEFAULT FALSE,
   is_reference_allowed BOOLEAN DEFAULT TRUE,
   engagement_data JSONB,                 -- {"likes":0,"saves":0,"comments":0}
@@ -559,9 +559,8 @@ CREATE TABLE samples (
 
 > [!NOTE]
 > **样本防重分阶段实现**：
-> - Phase 1：`source_url` UNIQUE 约束，防止同链接重复录入
-> - Phase 2：`content_hash` + Embedding 相似度检测（>0.95 提示疑似重复，用户选择合并或保留）
-> - Phase 3：SimHash 指纹 + 样本版本链管理
+> - Phase 1 & 2：仅依靠 `source_url` UNIQUE 约束，防止同链接重复录入
+> - Phase 3 以后：引入 `content_hash` + Embedding 相似度检测与 SimHash 指纹
 
 ### 6.2 sample_images — 图片表
 
@@ -571,7 +570,7 @@ CREATE TABLE sample_images (
   sample_id   UUID REFERENCES samples(id) ON DELETE CASCADE,
   image_type  TEXT NOT NULL,  -- 'cover' | 'content'
   image_url   TEXT NOT NULL,
-  ocr_text    TEXT,
+  storage_key TEXT NOT NULL,  -- 用于内部通过 StorageProvider 重新读取图片数据
   sort_order  INT DEFAULT 0,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
@@ -614,6 +613,9 @@ CREATE TABLE sample_visual_analysis (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sample_id       UUID UNIQUE REFERENCES samples(id) ON DELETE CASCADE,
 
+  -- OCR 结果
+  extracted_text      TEXT,          -- 从图片中提取的所有文字
+
   -- 枚举标签
   cover_style_tag     TEXT,          -- 高对比大字|极简|拼贴|手账|杂志感
   layout_type_tag     TEXT,          -- single_focus|multi_block|split
@@ -638,8 +640,7 @@ CREATE TABLE sample_visual_analysis (
 CREATE TABLE sample_embeddings (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sample_id       UUID REFERENCES samples(id) ON DELETE CASCADE,
-  embedding_type  TEXT NOT NULL,      -- 'title' | 'body' | 'analysis' | 'full'
-  embedding       vector(1536),       -- pgvector 类型
+  embedding       vector(1536),       -- pgvector 类型（目前仅存为 title+body 联合）
   model_version   TEXT DEFAULT 'text-embedding-3-small',
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -796,14 +797,15 @@ graph LR
 ### 7.1 Ingestion Agent（摄入器）
 
 - **输入**：用户提交的文章和图片
-- **处理**：文本清洗 · 图片存储 · OCR 调用
+- **处理**：文本清洗 · 图片存储（保存为 `storage_key`）
 - **输出**：原始层 + 图片层数据入库
+- **注**：这里不做任何 LLM 交互和 OCR
 
 ### 7.2 Analysis Agent（分析器） — Phase 1 核心
 
-- **输入**：一篇原始样本 + OCR 文本 + 图片
-- **处理**：调用文本 LLM 做结构化分析 + 多模态模型做视觉分析
-- **输出**：认知层数据（标签 + 摘要） + embedding 向量
+- **输入**：一篇原始样本 + 存储的图片
+- **处理**：调用文本 LLM 做结构化分析 + 多模态模型做视觉分析（含端到端 OCR 提取 `extracted_text`）
+- **输出**：认知层数据（标签 + 摘要） + 视觉 OCR 结果；分析完成后触发 embedding 任务
 - **关键约束**：使用 JSON Schema 约束输出，确保分析一致性
 
 ### 7.3 Profile Agent（聚合器） — Phase 2
@@ -1496,9 +1498,9 @@ migrations/
 | 场景 | 策略 |
 |------|------|
 | LLM API 失败 | 自动重试 3 次（指数退避 2s/4s/8s） |
-| LLM 输出格式错 | 重试 1 次 + 更严格 prompt；仍失败标记 `analysis_failed` |
-| OCR 失败 | 不阻塞后续分析（缺少 OCR 上下文但继续） |
-| Embedding 失败 | 标记 `embedding_pending`，后台定时重试 |
+| LLM 输出格式错 | 重试 1 次 + 更严格 prompt；仍失败标记 `failed` |
+| OCR 失败 | 不阻塞后续分析（视觉分析可缺少 `extracted_text`，但流程继续） |
+| Embedding 失败 | 标记 `failed`，支持后续手动重新触发 `sample-embed` |
 
 **原则**：单步失败不中断整条流水线。
 
@@ -1510,6 +1512,7 @@ migrations/
 interface StorageProvider {
   upload(file: Buffer, key: string): Promise<string>;
   getUrl(key: string): string;
+  getBuffer(key: string): Promise<Buffer>;
   delete(key: string): Promise<void>;
 }
 // 实现：LocalStorage / S3Storage — 只改 .env 即可切换
