@@ -18,10 +18,10 @@
 ### 1. 初始化 Next.js 项目
 
 ```bash
-npx -y create-next-app@latest ./ --typescript --app --eslint --no-tailwind --no-src-dir --import-alias "@/*"
+npx -y create-next-app@latest ./ --typescript --app --eslint --no-tailwind --src-dir --import-alias "@/*"
 ```
 
-> 注意：使用 `--no-tailwind`，样式用 Vanilla CSS + CSS Variables。
+> 注意：使用 `--src-dir` 保持 `src/` 目录结构。使用 `--no-tailwind`，样式用 Vanilla CSS + CSS Variables。
 
 安装核心依赖：
 
