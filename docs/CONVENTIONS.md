@@ -129,10 +129,28 @@ export const pool: Pool;
 export async function query<T>(text: string, params?: unknown[]): Promise<T[]>;
 export async function queryOne<T>(text: string, params?: unknown[]): Promise<T | null>;
 
+export interface SimilarSample {
+  sample_id: string;
+  title: string;
+  similarity: number;
+  track: string | null;
+  content_type: string | null;
+  reasoning_summary: string | null;
+  title_pattern_explanation: string | null;
+  opening_explanation: string | null;
+  structure_explanation: string | null;
+  cover_explanation?: string | null;
+}
+
 // Phase 3 新增
 export async function searchSimilarSamples(params: {
   taskEmbedding: number[];
-  filters: { track?: string; content_type?: string; is_reference_allowed?: boolean };
+  filters: {
+    track?: string;
+    content_type?: string[];
+    title_pattern_hints?: string[];
+    is_reference_allowed?: boolean;
+  };
   limit?: number;
   similarityThreshold?: number;
 }): Promise<SimilarSample[]>;
@@ -267,7 +285,7 @@ logger.error({ error, sampleId }, 'Analysis failed');
 |----|----|----------|
 | Phase 1 | Phase 2 | `db.ts` 导出 `query()` 和 `queryOne()`；`redis.ts` 导出 `redis` 实例；`llm.ts` 导出 4 个客户端；`storage.ts` 有可用的 `upload()` 和 `getBuffer()`；BullMQ 队列定义在 `queues/index.ts`；Worker 入口文件存在 |
 | Phase 2 | Phase 3 | `sample_analysis` 表有数据；`sample_embeddings` 表有向量；样本 API 可正常 CRUD |
-| Phase 3 | Phase 4 | `searchSimilarSamples()` 函数可用且已测试；`taskUnderstandingSchema` 已定义 |
+| Phase 3 | Phase 4 | `searchSimilarSamples()` 函数可用且已测试，并返回 `SimilarSample[]`；`taskUnderstandingSchema` 已定义；Zero-Shot 判断与参考用途分配留在生成流程中 |
 | Phase 4 | Phase 5 | 创作工作台页面可用；所有 Agent 和 Schema 就位；API 契约已实现 |
 | Phase 5 | Phase 6 | 所有 5 个页面可用；导航完整；CSS 设计系统完善 |
 

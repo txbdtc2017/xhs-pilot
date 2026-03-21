@@ -328,19 +328,24 @@ Agent 不直接生成，先输出两部分：
 > [!IMPORTANT]
 > **Query 重写是检索质量的关键**。不要用用户的原始输入直接做 embedding 检索——“写一篇让人收藏的职场干货”这种自然语言与样本内容的语义距离很大。`search_filters` 用于第一阶段结构化过滤，`rewritten_query` 用于第二阶段 embedding 相似度计算。
 
+执行检索前，先用 Embedding 模型将 `rewritten_query` 转为 `taskEmbedding`。
+
 **Step 3：参考检索**（两阶段 + 降级兜底）
-1. 结构化过滤：按赛道 + 内容类型 + 标题模式过滤，得到候选 20~50 篇
-2. 语义排序：对候选做 embedding 相似度排序 + rerank，精选 5~8 篇
-3. **相似度阈值检查**：若最高相似度 < 0.6 或命中数为 0，进入 Zero-Shot 降级模式（见 3.4 节），提示用户并跳过参考环节
-4. 用途分配：LLM 为每篇分配参考用途
+1. 调用 `searchSimilarSamples()`：按赛道 + 内容类型 + 标题模式做结构化过滤，并按 embedding 相似度排序，返回 `SimilarSample[]`
+2. **相似度阈值检查**：调用方根据返回结果判断 `reference_mode`
+   - 若最高相似度 < 0.6 或命中数为 0，进入 Zero-Shot 降级模式（见 3.4 节），提示用户并跳过参考环节
+   - 正常情况标记为 `reference_mode: 'referenced'`
+3. 用途分配：调用方 / Strategy 流程为每篇分配参考用途
    - 2 篇参考标题
    - 3 篇参考结构
-   - 1~2 篇参考封面表达
+   - 1 篇参考封面表达
+   - 0~1 篇参考语气
    - 标注排除原因（如有）
-5. **上下文精准裁剪**：按用途只提取对应维度的认知摘要，而非完整样本
+4. **上下文精准裁剪**：按用途只提取对应维度的认知摘要，而非完整样本
    - 参考标题的样本 → 只注入 `title_pattern_explanation` + 原标题
    - 参考结构的样本 → 只注入 `structure_explanation` + `opening_explanation`
    - 参考封面的样本 → 只注入 `cover_explanation`
+   - 参考语气的样本 → 只注入 `reasoning_summary` + 原标题
    - 严格控制注入 Token，避免"Lost in the Middle"效应
 
 **Step 4：策略制定**（自动应用，可选调整）
@@ -370,12 +375,16 @@ Agent 不直接生成，先输出两部分：
 |--------|------|------|
 | 标题 | 5 个 | 不同策略各出 1~2 个 |
 | 开头 | 3 个 | 不同切入方式 |
-| 正文 | 1~2 版 | 完整正文 |
+| 正文 | 1 版 | 完整正文（Phase 4 v1 固定 1 版） |
 | 结尾 CTA | 2 个 | 不同引导方式 |
-| 封面文案 | 2~3 套 | 主标题 + 副标题 |
+| 封面文案 | 2 套 | 主标题 + 副标题 |
 | 配图建议 | 1 份 | 建议配什么图 |
 | 标签 | 5~10 个 | hashtag 建议 |
-| 首评 | 1~2 条 | 引导互动的第一条评论 |
+| 首评 | 1 条 | 引导互动的第一条评论 |
+
+> [!IMPORTANT]
+> Generation Agent 的自由文本输出必须遵循固定章节顺序，再由服务端解析为 `generation_outputs`：
+> `标题候选 → 开头候选 → 正文 → CTA 候选 → 封面文案 → 标签建议 → 首评建议 → 配图建议`。
 
 > [!WARNING]
 > **防洗稿约束**：Generation Agent 的系统 Prompt 中必须包含去重指令——"提取参考样本的底层逻辑、节奏和结构，但在具象名词、案例、场景描述上必须做完全替换与重构，严禁直接复用原文的句式和修辞"。这是平台合规的基本要求。
@@ -462,9 +471,9 @@ Phase 1 只做数据回填和简单展示，不做自动权重调整。
 │             │                  │                 │
 │ · 主题       │ Step 1: 任务理解 ✅ │  标题候选 (5)      │
 │ · 目标人群    │ → 职场干货收藏型    │  开头 (3)          │
-│ · 目标效果    │                  │  正文 (1~2 版)     │
+│ · 目标效果    │                  │  正文 (1 版)       │
 │ · 风格偏好    │ Step 2: 样本检索 ✅ │  CTA (2)         │
-│ · 参考画像    │ → 找到 23 篇候选   │  封面文案 (2~3 套)  │
+│ · 参考画像    │ → 找到 23 篇候选   │  封面文案 (2 套)    │
 │ · 本人风格    │ → 精选 5 篇       │  标签建议          │
 │ · 封面建议    │ → [样本A] 标题参考  │  首评建议          │
 │             │ → [样本B] 结构参考  │                 │
@@ -487,12 +496,12 @@ Phase 1 只做数据回填和简单展示，不做自动权重调整。
 | 样本库列表页 | **Server Component** | 同上 |
 | 样本详情页主体 | **Server Component** | 数据展示为主 |
 | 样本详情页-人工修正表单 | `"use client"` | 表单交互 |
-| **创作工作台（整页）** | **`"use client"`** | 使用 Vercel AI SDK 的 `useCompletion`，需要客户端状态管理 |
+| **创作工作台（整页）** | **`"use client"`** | 通过 `fetch + ReadableStream` 消费 SSE 事件流，需要客户端状态管理 |
 | 风格画像列表 | **Server Component** | 数据展示 |
 | 风格画像编辑 | `"use client"` | 表单交互 |
 
 > [!CAUTION]
-> **不要**在 Server Component 中使用 `useCompletion`、`useChat`、`useState`、`useEffect` 等 React hooks。创作工作台必须整页标记为 `"use client"`。
+> **不要**在 Server Component 中使用 `useState`、`useEffect` 等 React hooks。创作工作台必须整页标记为 `"use client"`，并通过 `fetch + ReadableStream` 消费 `/api/generate` 的 SSE 事件流。
 
 ---
 
@@ -693,7 +702,8 @@ CREATE TABLE generation_tasks (
   persona_mode      TEXT DEFAULT 'balanced', -- self|strong_style|balanced
   need_cover_suggestion BOOLEAN DEFAULT TRUE,
   style_profile_id  UUID REFERENCES style_profiles(id),
-  status            TEXT DEFAULT 'pending', -- pending|understanding|searching|strategizing|generating|completed
+  reference_mode    TEXT,                  -- referenced|zero-shot
+  status            TEXT DEFAULT 'pending', -- pending|understanding|searching|strategizing|generating|completed|failed
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
 ```
@@ -722,6 +732,7 @@ CREATE TABLE task_strategy (
   opening_strategy    TEXT,
   structure_strategy  TEXT,
   cover_strategy      TEXT,
+  cta_strategy        TEXT,
   warnings            TEXT[],
   created_at          TIMESTAMPTZ DEFAULT NOW()
 );
@@ -735,17 +746,21 @@ CREATE TABLE generation_outputs (
   task_id         UUID REFERENCES generation_tasks(id) ON DELETE CASCADE,
   titles          JSONB,          -- ["标题1","标题2",...]
   openings        JSONB,          -- ["开头1","开头2",...]
-  body_versions   JSONB,          -- ["正文版本1","正文版本2"]
+  body_versions   JSONB,          -- ["正文版本1"]（Phase 4 v1 固定 1 版）
   cta_versions    JSONB,          -- ["CTA1","CTA2"]
   cover_copies    JSONB,          -- [{"main":"主标题","sub":"副标题"},...]
   hashtags        TEXT[],
-  first_comment   TEXT,
+  first_comment   TEXT,           -- Phase 4 v1 固定 1 条
   image_suggestions TEXT,
   model_name      TEXT,
   version         INT DEFAULT 1,  -- 支持多版本
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 ```
+
+> [!NOTE]
+> 如果数据库来自当前 Phase 1-3 的历史 migration，Phase 4 正式实现前需要补两条 forward-only migration：
+> `generation_tasks.reference_mode` 与 `task_strategy.cta_strategy`。不要修改已有历史 migration 文件。
 
 ### 6.12 task_feedback — 用户反馈
 
@@ -817,16 +832,16 @@ graph LR
 
 ### 7.4 Strategy Agent（策略器） — Phase 1 核心
 
-- **输入**：创作任务 + 检索到的参考样本
+- **输入**：创作任务 + 已裁剪的参考摘要
 - **处理**：理解任务类型 → 分析参考样本 → 制定创作策略
-- **输出**：结构化的创作策略（方向 · 标题 · 开头 · 结构 · 封面 · 避免事项）
+- **输出**：结构化的创作策略（方向 · 标题 · 开头 · 结构 · 封面 · CTA · 避免事项）
 - **关键**：这一步**不可省略**，它是系统从"拼 prompt"升级到"有策略的 Agent"的关键
 
 ### 7.5 Generation Agent（生成器）
 
 - **输入**：创作策略 + 参考样本的认知摘要
-- **处理**：基于策略和参考，生成多版本内容
-- **输出**：标题 · 正文 · CTA · 封面文案 · 标签 · 首评
+- **处理**：基于策略和参考，按固定章节模板生成内容，再由服务端解析为结构化结果
+- **输出**：标题（5）· 开头（3）· 正文（1）· CTA（2）· 封面文案（2）· 标签 · 首评（1）· 配图建议（1）
 
 ### 7.6 Feedback Agent（复盘器） — Phase 3
 
@@ -978,6 +993,23 @@ export const taskUnderstandingSchema = {
 }
 ```
 
+#### 8.1.3.a SimilarSample（检索层返回值）
+
+```typescript
+export interface SimilarSample {
+  sample_id: string;
+  title: string;
+  similarity: number;
+  track: string | null;
+  content_type: string | null;
+  reasoning_summary: string | null;
+  title_pattern_explanation: string | null;
+  opening_explanation: string | null;
+  structure_explanation: string | null;
+  cover_explanation?: string | null;
+}
+```
+
 #### 8.1.4 策略输出 Schema（Strategy Agent）
 
 ```typescript
@@ -1019,9 +1051,9 @@ export const strategySchema = {
 
 | 方法 | 路径 | 说明 | 请求体 | 返回 |
 |------|------|------|--------|------|
-| `POST` | `/api/generate` | 创作生成（**流式响应**） | `{ topic, target_audience?, goal?, style_preference?, persona_mode?, style_profile_id?, need_cover_suggestion? }` | **ReadableStream**：依次流式输出 task_understanding → references → strategy → generated_content |
-| `GET` | `/api/generate/[taskId]` | 查看历史生成任务 | - | `{ task, strategy, references, outputs, feedback? }` |
-| `GET` | `/api/generate/history` | 生成任务列表 | Query: `page`, `limit` | `{ tasks: Task[], total: number }` |
+| `POST` | `/api/generate` | 创作生成（**流式响应**） | `{ topic, target_audience?, goal?, style_preference?, persona_mode?, style_profile_id?, need_cover_suggestion? }` | `text/event-stream`：依次输出 `task_understanding` → `references` → `strategy_snapshot` → `generation_delta` / `generation_complete` → `done` |
+| `GET` | `/api/generate/[taskId]` | 查看历史生成任务 | - | `{ task, strategy, references, outputs, reference_mode, feedback? }` |
+| `GET` | `/api/generate/history` | 生成任务列表 | Query: `page`, `limit` | `{ tasks: Array<{ id, topic, status, reference_mode, created_at }>, total: number }` |
 
 #### 风格画像
 
@@ -1066,7 +1098,8 @@ export const strategySchema = {
 2. 参考透明：每条策略必须注明"参考了哪篇样本的什么维度"
 3. 上下文：只接收裁剪后的参考摘要，不接收完整样本正文
 4. Zero-Shot 模式：当没有参考样本时，基于通用小红书爆款逻辑输出策略
-5. 温度设置：temperature=0.3
+5. 输出必须覆盖标题、开头、结构、封面、CTA、避免事项等策略字段
+6. 温度设置：temperature=0.3
 ```
 
 #### Generation Agent（生成器）
@@ -1082,43 +1115,49 @@ export const strategySchema = {
    - self：偏向用户个人风格（如有画像）
    - strong_style：强参考样本风格
    - balanced：平衡
-6. 温度设置：temperature=0.7
+6. 输出格式：严格按照固定章节顺序输出
+   - 标题候选 → 开头候选 → 正文 → CTA 候选 → 封面文案 → 标签建议 → 首评建议 → 配图建议
+7. 数量约束：标题 5、开头 3、正文 1、CTA 2、封面文案 2、首评 1、配图建议 1
+8. 温度设置：temperature=0.7
 ```
 
 ---
 
 ### 8.4 流式响应实现约束（Vercel AI SDK）
 
-创作生成流程中，策略和内容是两种不同类型的输出，必须使用不同的流式 API：
+创作生成流程中，服务端内部使用 AI SDK 流式能力，但对前端统一暴露为 SSE 事件流：
 
-| 步骤 | 输出类型 | 使用的 API | 原因 |
-|------|----------|------------|------|
-| Step 4: 策略制定 | **结构化 JSON** | `streamObject()` | 前端需要实时解析 JSON 并渲染策略树 |
-| Step 5: 内容生成 | **自由文本** | `streamText()` | 打字机效果输出正文 |
+| 步骤 | 服务端内部输出 | 使用的 API | 对前端暴露 |
+|------|----------------|------------|------------|
+| Step 4: 策略制定 | **结构化 JSON** | `streamObject()` | `strategy_snapshot` SSE 事件 |
+| Step 5: 内容生成 | **自由文本** | `streamText()` | `generation_delta` / `generation_complete` SSE 事件 |
 
 ```typescript
-// —— 策略制定（结构化流式） ——
+// —— 服务端内部：策略制定（结构化流式） ——
 import { streamObject } from 'ai';
 
-// 前端能实时收到部分 JSON 并渲染
-const result = streamObject({
+const strategyResult = streamObject({
   model,
   schema: strategySchema,
   prompt: strategyPrompt,
 });
 
-// —— 内容生成（文本流式） ——
+// —— 服务端内部：内容生成（文本流式） ——
 import { streamText } from 'ai';
 
-// 前端收到逐字打字机效果
-const result = streamText({
+const generationResult = streamText({
   model,
   prompt: generationPrompt,
 });
+
+// —— 对前端统一输出 SSE 事件 ——
+writeSseEvent('strategy_snapshot', partialStrategy);
+writeSseEvent('generation_delta', { text: chunk });
+writeSseEvent('generation_complete', parsedOutput);
 ```
 
 > [!CAUTION]
-> **不要**用 `streamText()` 输出策略 JSON——前端无法增量解析，只能等全部完成后 `JSON.parse`，失去流式意义。也**不要**用 `streamObject()` 输出正文——让自由文本强行套 Schema 会导致格式混乱。
+> **不要**把 AI SDK 原始流直接透传给前端。前端只消费统一的 SSE 事件协议；`streamObject()` 与 `streamText()` 仅用于服务端内部生成。
 
 ---
 
@@ -1132,7 +1171,8 @@ async function searchSimilarSamples(params: {
   taskEmbedding: number[];       // 任务的 embedding 向量
   filters: {                     // 结构化过滤条件
     track?: string;
-    content_type?: string;
+    content_type?: string[];
+    title_pattern_hints?: string[];
     is_reference_allowed?: boolean;
   };
   limit?: number;                // 默认 20
@@ -1145,6 +1185,8 @@ async function searchSimilarSamples(params: {
 2. **向量序列化**：传给 pg 的 embedding 参数必须格式化为 `'[0.1,0.2,...]'` 字符串，不能直接传 JS 数组
 3. **相似度计算**：使用 `embedding <=> $vectorParam` 语法（余弦距离），结果越小越相似
 4. **转换为相似度**：`1 - (embedding <=> $vectorParam)` 得到 0~1 的相似度分数
+5. **函数职责边界**：`searchSimilarSamples()` 只返回排序后的 `SimilarSample[]`，不负责 Zero-Shot 判断、参考用途分配或前端展示结构包装
+6. **系统过滤项**：`is_reference_allowed` 由系统侧补充，`content_type` / `title_pattern_hints` 来自 `taskUnderstandingSchema` 的 `search_filters`
 
 ---
 
