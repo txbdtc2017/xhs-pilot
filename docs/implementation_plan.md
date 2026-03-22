@@ -1453,18 +1453,19 @@ DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_N
 # 本地开发用 localhost，Docker Compose 中会通过 compose 环境覆盖为 redis
 REDIS_URL=redis://localhost:6379
 
-# ===== LLM（厂商解耦，支持任意 OpenAI 兼容 API） =====
-# 支持：OpenAI / 中转代理 / Ollama（http://localhost:11434/v1）/ DeepSeek / etc.
+# ===== LLM（厂商解耦，支持 OpenAI-compatible 与 Anthropic Messages） =====
+# LLM_PROTOCOL 可选：openai | anthropic-messages
 LLM_API_KEY=sk-xxx
+LLM_PROTOCOL=openai
 LLM_BASE_URL=https://api.openai.com/v1
 LLM_MODEL_ANALYSIS=gpt-4o              # 分析用模型
 LLM_MODEL_GENERATION=gpt-4o            # 生成用模型
 LLM_MODEL_VISION=gpt-4o                # 多模态用模型
+VISION_PROTOCOL=${LLM_PROTOCOL}        # Vision 协议未配置时回退到 LLM_PROTOCOL
 VISION_API_KEY=${LLM_API_KEY}          # Vision 优先，未配置则回退到 LLM_API_KEY
 VISION_BASE_URL=${LLM_BASE_URL}        # Vision 优先，未配置则回退到 LLM_BASE_URL
 
-# ===== Embedding（同样解耦，支持本地模型） =====
-# 支持：OpenAI / 本地 Ollama + m3e-base / 其他兼容 API
+# ===== Embedding（独立 provider，仍使用 OpenAI-compatible 接口） =====
 EMBEDDING_API_KEY=${LLM_API_KEY}
 EMBEDDING_BASE_URL=${LLM_BASE_URL}
 EMBEDDING_MODEL=text-embedding-3-small
@@ -1489,11 +1490,11 @@ LOG_LEVEL=info
 > 这样同一份 `.env` 在两种模式下都可用。
 
 > [!TIP]
-> **LLM 厂商解耦设计**：通过 Vercel AI SDK 的 `createOpenAI()` 工厂函数，传入 `LLM_BASE_URL` 和 `LLM_API_KEY` 创建客户端。开源用户只需修改这两个变量即可接入：
-> - **Ollama 本地模型**：`LLM_BASE_URL=http://localhost:11434/v1`（Docker 中为 `http://host.docker.internal:11434/v1`）
-> - **DeepSeek**：`LLM_BASE_URL=https://api.deepseek.com`, `LLM_API_KEY=sk-xxx`
-> - **中转代理**：`LLM_BASE_URL=https://your-proxy.com/v1`
-> - Vision 与 Embedding 同理，可分别独立配置不同服务商
+> **LLM 厂商解耦设计**：通过 Vercel AI SDK 按 `LLM_PROTOCOL` / `VISION_PROTOCOL` 选择 provider：
+> - `openai`：继续使用 OpenAI-compatible 接口，适配 OpenAI / Ollama / DeepSeek / 中转代理
+> - `anthropic-messages`：适配 Claude Code / Kimi coding 风格的 Anthropic-compatible endpoint
+> - Vision 与文本可使用不同协议；若未单独配置 `VISION_PROTOCOL`，则回退到 `LLM_PROTOCOL`
+> - Embedding 仍独立配置，不跟随 `anthropic-messages` 自动切换
 
 ---
 

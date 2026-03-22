@@ -95,8 +95,9 @@ PWA 不承诺：
   - Docker Compose 一键启动
   - 默认端口 `17789` 与 `PORT` 注入方式
   - `npm run seed` 是手动演示数据命令，不承诺检索链路冒烟
-  - Vision provider 独立配置（`VISION_*` 回退到 `LLM_*`）
-  - OpenAI / Ollama / DeepSeek / 中转代理配置示例
+  - Vision provider 独立配置（`VISION_PROTOCOL` 回退到 `LLM_PROTOCOL`，`VISION_*` 继续逐字段回退到 `LLM_*`）
+  - OpenAI / Anthropic Messages（Kimi coding）/ Ollama / DeepSeek / 中转代理配置示例
+  - Embedding 独立 provider 说明
   - 备份恢复
   - 手动清理开发环境测试数据
   - same-origin 安全模型
