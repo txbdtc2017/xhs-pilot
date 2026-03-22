@@ -1,5 +1,6 @@
 import type { AnalysisResult } from '@/agents/schemas/analysis';
 import type { VisualAnalysisResult } from '@/agents/schemas/visual-analysis';
+import { resolveSearchModeStatus } from './lib/search-mode';
 
 export interface AnalyzeJobLike {
   id?: string | number | undefined;
@@ -45,6 +46,7 @@ export async function processAnalyzeJob(
   dependencies: AnalyzeJobDependencies,
 ): Promise<void> {
   const { sampleId } = job.data;
+  const searchModeStatus = resolveSearchModeStatus();
   dependencies.logger.info({ sampleId }, 'Starting analysis job');
 
   await dependencies.query('UPDATE samples SET status = $1 WHERE id = $2', ['analyzing', sampleId]);
@@ -124,9 +126,19 @@ export async function processAnalyzeJob(
     } catch (error) {
       dependencies.logger.warn(
         { error, sampleId, storageKey: coverImage.storage_key },
-        'Visual analysis failed; continuing to embedding',
+        'Visual analysis failed; continuing to next stage',
       );
     }
+  }
+
+  if (searchModeStatus.searchMode === 'misconfigured') {
+    throw new Error(searchModeStatus.searchModeReason ?? 'Embedding provider is misconfigured.');
+  }
+
+  if (searchModeStatus.searchMode === 'lexical-only') {
+    await dependencies.query('UPDATE samples SET status = $1 WHERE id = $2', ['completed', sampleId]);
+    dependencies.logger.info({ sampleId }, 'Analysis job completed in lexical-only mode');
+    return;
   }
 
   await dependencies.query('UPDATE samples SET status = $1 WHERE id = $2', ['embedding', sampleId]);
@@ -167,4 +179,3 @@ export async function processEmbedJob(
 
   dependencies.logger.info({ sampleId }, 'Embedding job completed');
 }
-

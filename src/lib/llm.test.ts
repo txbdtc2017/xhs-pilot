@@ -160,3 +160,15 @@ test('createProviderFactories raises a clear error when a language-model API key
     /LLM provider API key is required/,
   );
 });
+
+test('resolveProviderOptions does not implicitly reuse the shared LLM provider for embeddings', () => {
+  const resolved = resolveProviderOptions({
+    LLM_API_KEY: 'main-key',
+    LLM_BASE_URL: 'https://llm.example/v1',
+  });
+
+  assert.deepEqual(resolved.embedding, {
+    apiKey: undefined,
+    baseURL: undefined,
+  });
+});

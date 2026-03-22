@@ -1,4 +1,22 @@
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: sh -lc "./scripts/with-env.sh node-pg-migrate up"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DATABASE_URL: postgresql://${DB_USER:-xhs_pilot}:${DB_PASSWORD:-change-me}@postgres:${DB_PORT:-5432}/${DB_NAME:-xhs_pilot}
+      NODE_ENV: production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: "no"
+
   app:
     build:
       context: .
@@ -6,6 +24,8 @@ services:
     ports:
       - "${PORT:-17789}:${PORT:-17789}"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -28,8 +48,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: sh -lc "./scripts/with-env.sh node-pg-migrate up && exec npm run worker:start"
+    command: sh -lc "exec npm run worker:start"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:

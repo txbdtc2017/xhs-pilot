@@ -6,6 +6,7 @@ import { query, queryOne } from './lib/db';
 import { llmEmbedding } from './lib/llm';
 import { logger } from './lib/logger';
 import { redisConnection } from './lib/redis';
+import { DEFAULT_EMBEDDING_MODEL, resolveSearchModeStatus } from './lib/search-mode';
 import { storage } from './lib/storage';
 import { embedQueue } from './queues';
 import {
@@ -33,8 +34,15 @@ function createEmbedJobDependencies(): EmbedJobDependencies {
     query,
     queryOne,
     createEmbedding: async (textToEmbed: string) => {
+      const searchModeStatus = resolveSearchModeStatus();
+      if (searchModeStatus.searchMode !== 'hybrid') {
+        throw new Error(
+          searchModeStatus.searchModeReason ?? 'Embedding provider is not available for backfill.',
+        );
+      }
+
       const { embeddings } = await embedMany({
-        model: llmEmbedding.textEmbeddingModel(process.env.EMBEDDING_MODEL || 'text-embedding-3-small'),
+        model: llmEmbedding.textEmbeddingModel(process.env.EMBEDDING_MODEL || DEFAULT_EMBEDDING_MODEL),
         values: [textToEmbed],
         maxRetries: 3,
       });

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
 import { redis } from '@/lib/redis';
 import { logger } from '@/lib/logger';
+import { resolveSearchModeStatus } from '@/lib/search-mode';
 
 async function withTimeout<T>(operation: Promise<T>, label: string, timeoutMs = 2000): Promise<T> {
   return Promise.race([
@@ -17,6 +18,7 @@ async function withTimeout<T>(operation: Promise<T>, label: string, timeoutMs = 
 export async function GET() {
   let dbStatus: 'ok' | 'error' = 'ok';
   let redisStatus: 'ok' | 'error' = 'ok';
+  const searchModeStatus = resolveSearchModeStatus();
 
   try {
     const dbResult = await withTimeout(pool.query('SELECT 1'), 'Database health check');
@@ -43,6 +45,10 @@ export async function GET() {
   const status = {
     db: dbStatus,
     redis: redisStatus,
+    search: {
+      mode: searchModeStatus.searchMode,
+      reason: searchModeStatus.searchModeReason,
+    },
   };
 
   return NextResponse.json(status, {

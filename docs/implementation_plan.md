@@ -326,16 +326,17 @@ Agent 不直接生成，先输出两部分：
 ```
 
 > [!IMPORTANT]
-> **Query 重写是检索质量的关键**。不要用用户的原始输入直接做 embedding 检索——“写一篇让人收藏的职场干货”这种自然语言与样本内容的语义距离很大。`search_filters` 用于第一阶段结构化过滤，`rewritten_query` 用于第二阶段 embedding 相似度计算。
+> **Query 重写是检索质量的关键**。不要用用户的原始输入直接做 embedding 检索——“写一篇让人收藏的职场干货”这种自然语言与样本内容的语义距离很大。`search_filters` 用于第一阶段结构化过滤；在 `hybrid` 模式下，`rewritten_query` 用于第二阶段 embedding 相似度计算；在 `lexical-only` 模式下，则用于轻量关键词召回。
 
-执行检索前，先用 Embedding 模型将 `rewritten_query` 转为 `taskEmbedding`。
+执行检索前，若当前为 `hybrid` 模式，则先用 Embedding 模型将 `rewritten_query` 转为 `taskEmbedding`。
 
 **Step 3：参考检索**（两阶段 + 降级兜底）
-1. 调用 `searchSimilarSamples()`：按赛道 + 内容类型 + 标题模式做结构化过滤，并按 embedding 相似度排序，返回 `SimilarSample[]`
-2. **相似度阈值检查**：调用方根据返回结果判断 `reference_mode`
+1. `hybrid` 模式调用 `searchSimilarSamples()`：按赛道 + 内容类型 + 标题模式做结构化过滤，并按 embedding 相似度排序，返回 `SimilarSample[]`
+2. `lexical-only` 模式调用词法检索：沿用结构化过滤，并基于标题、正文、OCR 与分析摘要做轻量关键词排序
+3. **相似度阈值检查**：调用方根据返回结果判断 `reference_mode`
    - 若最高相似度 < 0.6 或命中数为 0，进入 Zero-Shot 降级模式（见 3.4 节），提示用户并跳过参考环节
    - 正常情况标记为 `reference_mode: 'referenced'`
-3. 用途分配：调用方 / Strategy 流程为每篇分配参考用途
+4. 用途分配：调用方 / Strategy 流程为每篇分配参考用途
    - 2 篇参考标题
    - 3 篇参考结构
    - 1 篇参考封面表达
@@ -557,7 +558,7 @@ CREATE TABLE samples (
   platform        TEXT DEFAULT 'xiaohongshu',
   manual_notes    TEXT,
   manual_tags     TEXT[],                -- 用户手动标签
-  status          TEXT DEFAULT 'pending',  -- pending | analyzing | embedding | completed | failed
+  status          TEXT DEFAULT 'pending',  -- pending | analyzing | embedding | completed | failed（embedding 仅为 hybrid 模式中间态）
   is_high_value   BOOLEAN DEFAULT FALSE,
   is_reference_allowed BOOLEAN DEFAULT TRUE,
   engagement_data JSONB,                 -- {"likes":0,"saves":0,"comments":0}
@@ -820,7 +821,7 @@ graph LR
 
 - **输入**：一篇原始样本 + 存储的图片
 - **处理**：调用文本 LLM 做结构化分析 + 多模态模型做视觉分析（含端到端 OCR 提取 `extracted_text`）
-- **输出**：认知层数据（标签 + 摘要） + 视觉 OCR 结果；分析完成后触发 embedding 任务
+- **输出**：认知层数据（标签 + 摘要） + 视觉 OCR 结果；`hybrid` 模式下分析完成后触发 embedding 任务，`lexical-only` 模式下直接完成
 - **关键约束**：使用 JSON Schema 约束输出，确保分析一致性
 
 ### 7.3 Profile Agent（聚合器） — Phase 2
@@ -1465,9 +1466,10 @@ VISION_PROTOCOL=${LLM_PROTOCOL}        # Vision 协议未配置时回退到 LLM_
 VISION_API_KEY=${LLM_API_KEY}          # Vision 优先，未配置则回退到 LLM_API_KEY
 VISION_BASE_URL=${LLM_BASE_URL}        # Vision 优先，未配置则回退到 LLM_BASE_URL
 
-# ===== Embedding（独立 provider，仍使用 OpenAI-compatible 接口） =====
-EMBEDDING_API_KEY=${LLM_API_KEY}
-EMBEDDING_BASE_URL=${LLM_BASE_URL}
+# ===== Embedding（可选增强能力，仍使用 OpenAI-compatible 接口） =====
+# 留空时进入 lexical-only 检索模式；配置不完整会被视为 misconfigured
+EMBEDDING_API_KEY=
+EMBEDDING_BASE_URL=
 EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_DIMENSIONS=1536              # 当前未被运行时读取，暂保留为兼容字段
 
@@ -1495,6 +1497,7 @@ LOG_LEVEL=info
 > - `anthropic-messages`：适配 Claude Code / Kimi coding 风格的 Anthropic-compatible endpoint
 > - Vision 与文本可使用不同协议；若未单独配置 `VISION_PROTOCOL`，则回退到 `LLM_PROTOCOL`
 > - Embedding 仍独立配置，不跟随 `anthropic-messages` 自动切换
+> - 未配置 `EMBEDDING_*` 时系统进入 `lexical-only`；若显式配置但不完整，则进入 `misconfigured`
 
 ---
 
@@ -1510,7 +1513,7 @@ migrations/
 └── 012_create-indexes.sql
 ```
 
-- 容器启动时自动 `migrate up`
+- Docker Compose 通过一次性的 `migrate` service 先执行 `migrate up`，`app` 和 `worker` 只在迁移成功后启动
 - 修改结构 → 新增迁移文件（不改已有文件）
 - 支持 `migrate down` 回滚
 
@@ -1523,7 +1526,7 @@ migrations/
 | 队列 | 触发时机 | 处理内容 |
 |------|----------|----------|
 | `sample-analyze` | 样本录入后 | GPT-4o Vision 端到端分析（含 OCR） |
-| `sample-embed` | 分析完成后 | 生成 embedding 向量 |
+| `sample-embed` | `hybrid` 模式下分析完成后 | 生成 embedding 向量 |
 | `style-summarize` | 画像样本变更后 | 汇总画像规则 |
 
 > [!IMPORTANT]

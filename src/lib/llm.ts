@@ -99,8 +99,8 @@ export function resolveProviderOptions(
       baseURL: resolveEnvValue(env.VISION_BASE_URL, llm.baseURL),
     },
     embedding: {
-      apiKey: resolveEnvValue(env.EMBEDDING_API_KEY, llm.apiKey),
-      baseURL: resolveEnvValue(env.EMBEDDING_BASE_URL, llm.baseURL),
+      apiKey: resolveEnvValue(env.EMBEDDING_API_KEY),
+      baseURL: resolveEnvValue(env.EMBEDDING_BASE_URL),
     },
   };
 }

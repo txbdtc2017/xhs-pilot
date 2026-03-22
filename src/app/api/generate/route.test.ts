@@ -115,6 +115,8 @@ test('POST /api/generate streams understanding, references, strategy, generation
     },
     understandTask: async () => taskUnderstanding,
     retrieveTaskReferencesFromUnderstanding: async () => ({
+      searchMode: 'hybrid' as const,
+      searchModeReason: null,
       referenceMode: 'referenced' as const,
       similarSamples: [
         {
@@ -179,6 +181,44 @@ test('POST /api/generate streams understanding, references, strategy, generation
   assert.deepEqual(saved.strategy, strategy);
   assert.ok(saved.references);
   assert.ok(saved.outputs);
+
+  const referencesEvent = events.find((event) => event.event === 'references');
+  assert.deepEqual(referencesEvent?.data, {
+    search_mode: 'hybrid',
+    search_mode_reason: null,
+    reference_mode: 'referenced',
+    candidate_count: 1,
+    selected_references: [
+      {
+        sample_id: 'sample-1',
+        title: '参考标题',
+        similarity: 0.91,
+        reference_type: 'title',
+        reason: '标题模式说明完整，适合提供标题节奏参考',
+      },
+      {
+        sample_id: 'sample-1',
+        title: '参考标题',
+        similarity: 0.91,
+        reference_type: 'structure',
+        reason: '结构拆解信息完整，适合提供段落与开头组织参考',
+      },
+      {
+        sample_id: 'sample-1',
+        title: '参考标题',
+        similarity: 0.91,
+        reference_type: 'visual',
+        reason: '封面表达摘要完整，适合提供封面表达参考',
+      },
+      {
+        sample_id: 'sample-1',
+        title: '参考标题',
+        similarity: 0.91,
+        reference_type: 'tone',
+        reason: '综合语气摘要明确，适合提供语气参考',
+      },
+    ],
+  });
 });
 
 test('POST /api/generate emits zero-shot references when retrieval falls back', async () => {
@@ -190,10 +230,12 @@ test('POST /api/generate emits zero-shot references when retrieval falls back', 
     saveTaskOutputs: async () => {},
     understandTask: async () => createTaskUnderstanding(),
     retrieveTaskReferencesFromUnderstanding: async () => ({
+      searchMode: 'lexical-only' as const,
+      searchModeReason: 'EMBEDDING_* 未配置，已切换到 lexical-only 检索。',
       referenceMode: 'zero-shot' as const,
       similarSamples: [],
       taskUnderstanding: createTaskUnderstanding(),
-      taskEmbedding: [0.4],
+      taskEmbedding: [],
     }),
     startStrategyStream: async () => ({
       partialObjectStream: createAsyncIterable([createStrategyResult()]),
@@ -214,6 +256,8 @@ test('POST /api/generate emits zero-shot references when retrieval falls back', 
   const referencesEvent = events.find((event) => event.event === 'references');
 
   assert.deepEqual(referencesEvent?.data, {
+    search_mode: 'lexical-only',
+    search_mode_reason: 'EMBEDDING_* 未配置，已切换到 lexical-only 检索。',
     reference_mode: 'zero-shot',
     candidate_count: 0,
     selected_references: [],

@@ -39,6 +39,8 @@ test('applyStreamEvent updates task understanding, references, strategy, and gen
   state = applyStreamEvent(state, {
     event: 'references',
     data: {
+      search_mode: 'hybrid',
+      search_mode_reason: null,
       reference_mode: 'referenced',
       candidate_count: 3,
       selected_references: [

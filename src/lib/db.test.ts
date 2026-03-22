@@ -1,17 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  buildSearchSimilarSamplesQuery,
-  serializeVectorForPg,
-} from './db';
+import * as db from './db';
 
 test('serializeVectorForPg formats embeddings as pgvector literals', () => {
-  assert.equal(serializeVectorForPg([0.1, 2, -0.35]), '[0.1,2,-0.35]');
+  assert.equal(db.serializeVectorForPg([0.1, 2, -0.35]), '[0.1,2,-0.35]');
 });
 
 test('buildSearchSimilarSamplesQuery parameterizes structured filters and similarity threshold', () => {
-  const query = buildSearchSimilarSamplesQuery({
+  const query = db.buildSearchSimilarSamplesQuery({
     taskEmbedding: [0.1, 0.2],
     filters: {
       track: '职场',
@@ -43,7 +40,7 @@ test('buildSearchSimilarSamplesQuery parameterizes structured filters and simila
 });
 
 test('buildSearchSimilarSamplesQuery falls back to default threshold and limit when optional filters are omitted', () => {
-  const query = buildSearchSimilarSamplesQuery({
+  const query = db.buildSearchSimilarSamplesQuery({
     taskEmbedding: [0.3, 0.4],
     filters: {},
   });
@@ -54,4 +51,8 @@ test('buildSearchSimilarSamplesQuery falls back to default threshold and limit w
   assert.doesNotMatch(query.text, /sa\.track =/);
   assert.doesNotMatch(query.text, /sa\.content_type = ANY/);
   assert.doesNotMatch(query.text, /sa\.title_pattern_tags &&/);
+});
+
+test('db exports a lexical search query builder for lexical-only mode', () => {
+  assert.equal(typeof (db as Record<string, unknown>).buildSearchLexicalSamplesQuery, 'function');
 });

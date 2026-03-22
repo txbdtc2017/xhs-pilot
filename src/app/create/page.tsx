@@ -373,13 +373,20 @@ function CreatePageClient() {
               {state.references ? (
                 <div className={styles.list}>
                   <div className={styles.kvItem}>
-                    <div className={styles.kvLabel}>模式</div>
+                    <div className={styles.kvLabel}>检索模式</div>
+                    <div className={styles.kvValue}>{state.references.search_mode}</div>
+                  </div>
+                  <div className={styles.kvItem}>
+                    <div className={styles.kvLabel}>参考模式</div>
                     <div className={styles.kvValue}>{state.references.reference_mode}</div>
                   </div>
                   <div className={styles.kvItem}>
                     <div className={styles.kvLabel}>候选数量</div>
                     <div className={styles.kvValue}>{state.references.candidate_count}</div>
                   </div>
+                  {state.references.search_mode_reason ? (
+                    <div className={styles.panelHint}>{state.references.search_mode_reason}</div>
+                  ) : null}
                   {state.references.selected_references.length > 0 ? (
                     state.references.selected_references.map((reference) => (
                       <div className={styles.referenceItem} key={`${reference.sample_id}-${reference.reference_type}`}>
@@ -392,7 +399,11 @@ function CreatePageClient() {
                       </div>
                     ))
                   ) : (
-                    <div className={styles.emptyState}>本次任务进入 zero-shot 模式。</div>
+                    <div className={styles.emptyState}>
+                      {state.references.search_mode === 'lexical-only'
+                        ? '当前运行在 lexical-only 检索，未命中可用样本，已进入 zero-shot 模式。'
+                        : '本次任务进入 zero-shot 模式。'}
+                    </div>
                   )}
                 </div>
               ) : (

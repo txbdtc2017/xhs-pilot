@@ -30,6 +30,8 @@ export interface SelectedReferencePayload {
 }
 
 export interface ReferencesPayload {
+  search_mode: 'hybrid' | 'lexical-only' | 'misconfigured';
+  search_mode_reason?: string | null;
   reference_mode: 'zero-shot' | 'referenced';
   candidate_count: number;
   selected_references: SelectedReferencePayload[];

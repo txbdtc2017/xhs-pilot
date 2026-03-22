@@ -9,4 +9,9 @@ if [ -f .env ]; then
   set +a
 fi
 
+if [ -d ./node_modules/.bin ]; then
+  PATH="$(pwd)/node_modules/.bin:${PATH}"
+  export PATH
+fi
+
 exec "$@"

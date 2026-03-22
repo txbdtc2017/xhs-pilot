@@ -50,6 +50,12 @@ function createDependencies(
     generateTaskUnderstanding: async () => createTaskUnderstanding(),
     createTaskEmbedding: async () => [0.12, 0.34],
     searchSimilarSamples: async () => [],
+    searchLexicalSamples: async () => [],
+    getSearchModeStatus: () => ({
+      searchMode: 'hybrid',
+      searchModeReason: null,
+      embeddingModel: 'text-embedding-3-small',
+    }),
     ...overrides,
   };
 }
@@ -147,6 +153,81 @@ test('retrieveTaskReferencesFromUnderstanding reuses an existing understanding r
   assert.deepEqual(result.taskUnderstanding, taskUnderstanding);
   assert.deepEqual(result.taskEmbedding, [0.21, 0.43]);
   assert.equal(result.referenceMode, 'zero-shot');
+});
+
+test('retrieveTaskReferences skips embeddings and uses lexical candidates when no embedding provider is configured', async () => {
+  const originalEmbeddingApiKey = process.env.EMBEDDING_API_KEY;
+  const originalEmbeddingBaseUrl = process.env.EMBEDDING_BASE_URL;
+  const originalEmbeddingModel = process.env.EMBEDDING_MODEL;
+
+  delete process.env.EMBEDDING_API_KEY;
+  delete process.env.EMBEDDING_BASE_URL;
+  delete process.env.EMBEDDING_MODEL;
+
+  try {
+    const taskUnderstanding = createTaskUnderstanding({
+      rewritten_query: '职场 复盘 清单 收藏导向',
+    });
+    const steps: string[] = [];
+
+    const dependencies: StrategyDependencies = {
+      generateTaskUnderstanding: async () => {
+        steps.push('understand');
+        return taskUnderstanding;
+      },
+      createTaskEmbedding: async () => {
+        steps.push('embed');
+        throw new Error('embedding should not be called');
+      },
+      searchSimilarSamples: async () => {
+        steps.push('vector');
+        throw new Error('vector search should not be called');
+      },
+      searchLexicalSamples: async (params) => {
+        steps.push('lexical');
+        assert.equal(params.query, '职场 复盘 清单 收藏导向');
+        assert.equal(params.topic, '写一篇让人想收藏的职场复盘笔记');
+        assert.deepEqual(params.filters, {
+          track: '职场',
+          content_type: ['清单', '经验'],
+          title_pattern_hints: ['数字型', '结果先行'],
+          is_reference_allowed: true,
+        });
+
+        return [
+          ...Array.from({ length: 5 }, (_, index) => ({
+            sample_id: `sample-lexical-${index + 1}`,
+            title: `职场复盘清单样本 ${index + 1}`,
+            similarity: 0.74 - index * 0.02,
+            track: '职场',
+            content_type: '清单',
+            reasoning_summary: '命中职场复盘主题',
+            title_pattern_explanation: '结果先行',
+            opening_explanation: '痛点切入',
+            structure_explanation: '三点清单',
+            cover_explanation: '高对比大字',
+          })),
+        ];
+      },
+      getSearchModeStatus: () => ({
+        searchMode: 'lexical-only',
+        searchModeReason: 'EMBEDDING_* 未配置，已切换到 lexical-only 检索。',
+        embeddingModel: 'text-embedding-3-small',
+      }),
+    };
+
+    const result = await retrieveTaskReferences(createTaskInput(), dependencies);
+
+    assert.deepEqual(steps, ['understand', 'lexical']);
+    assert.equal((result as { searchMode?: string }).searchMode, 'lexical-only');
+    assert.deepEqual(result.taskEmbedding, []);
+    assert.equal(result.referenceMode, 'referenced');
+    assert.equal(result.similarSamples[0]?.sample_id, 'sample-lexical-1');
+  } finally {
+    process.env.EMBEDDING_API_KEY = originalEmbeddingApiKey;
+    process.env.EMBEDDING_BASE_URL = originalEmbeddingBaseUrl;
+    process.env.EMBEDDING_MODEL = originalEmbeddingModel;
+  }
 });
 
 test('selectTaskReferences allocates references by dimension when similar samples are available', () => {

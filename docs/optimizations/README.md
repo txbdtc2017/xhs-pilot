@@ -21,6 +21,8 @@
 | 编号 | 文件 | 内容 |
 |------|------|------|
 | 001 | `OPT-001-env-seed-and-vision.md` | 默认空库、环境配置收口、图片解析 LLM 独立接入 |
+| 002 | `OPT-002-anthropic-messages-provider.md` | Anthropic Messages provider 接入与多厂商文本链路解耦 |
+| 003 | `OPT-003-embedding-explicit-and-lexical-only.md` | Embedding 显式配置、lexical-only 兜底与回填命令 |
 
 ## 如何使用
 

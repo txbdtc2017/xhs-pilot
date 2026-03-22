@@ -1,10 +1,18 @@
 import { embed, generateObject, jsonSchema, streamObject } from 'ai';
 import {
+  searchLexicalSamples,
   searchSimilarSamples,
+  type SearchLexicalSamplesParams,
   type SearchSimilarSamplesParams,
   type SimilarSample,
 } from '@/lib/db';
 import { llmAnalysis, llmEmbedding } from '@/lib/llm';
+import {
+  DEFAULT_EMBEDDING_MODEL,
+  resolveSearchModeStatus,
+  type SearchMode,
+  type SearchModeStatus,
+} from '@/lib/search-mode';
 import {
   STRATEGY_SYSTEM_PROMPT,
   TASK_UNDERSTANDING_SYSTEM_PROMPT,
@@ -47,6 +55,8 @@ export interface ReferenceContextBlock extends SelectedTaskReference {
 }
 
 export interface RetrieveTaskReferencesResult {
+  searchMode: SearchMode;
+  searchModeReason: string | null;
   referenceMode: ReferenceMode;
   similarSamples: SimilarSample[];
   taskUnderstanding: TaskUnderstandingResult;
@@ -60,6 +70,8 @@ export interface StrategyDependencies {
   }) => Promise<TaskUnderstandingResult>;
   createTaskEmbedding: (query: string) => Promise<number[]>;
   searchSimilarSamples: (params: SearchSimilarSamplesParams) => Promise<SimilarSample[]>;
+  searchLexicalSamples: (params: SearchLexicalSamplesParams) => Promise<SimilarSample[]>;
+  getSearchModeStatus: () => SearchModeStatus;
 }
 
 export interface StreamStrategyDependencies {
@@ -75,6 +87,7 @@ export interface StreamStrategyDependencies {
 export interface RetrieveTaskReferencesOptions {
   zeroShotThreshold?: number;
   limit?: number;
+  topic?: string;
 }
 
 function buildTaskUnderstandingPrompt(input: TaskInput): string {
@@ -116,9 +129,7 @@ function createDefaultStrategyDependencies(): StrategyDependencies {
     },
     createTaskEmbedding: async (query) => {
       const { embedding } = await embed({
-        model: llmEmbedding.textEmbeddingModel(
-          process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
-        ),
+        model: llmEmbedding.textEmbeddingModel(process.env.EMBEDDING_MODEL || DEFAULT_EMBEDDING_MODEL),
         value: query,
         maxRetries: 3,
       });
@@ -126,6 +137,8 @@ function createDefaultStrategyDependencies(): StrategyDependencies {
       return embedding;
     },
     searchSimilarSamples,
+    searchLexicalSamples,
+    getSearchModeStatus: () => resolveSearchModeStatus(),
   };
 }
 
@@ -182,6 +195,78 @@ export function resolveReferenceMode(
   }
 
   return similarSamples[0].similarity < zeroShotThreshold ? 'zero-shot' : 'referenced';
+}
+
+function buildLexicalSearchStages(filters: {
+  track?: string;
+  content_type?: string[];
+  title_pattern_hints?: string[];
+  is_reference_allowed?: boolean;
+}): Array<{
+  track?: string;
+  content_type?: string[];
+  title_pattern_hints?: string[];
+  is_reference_allowed?: boolean;
+}> {
+  return [
+    filters,
+    {
+      ...filters,
+      title_pattern_hints: undefined,
+    },
+    {
+      ...filters,
+      title_pattern_hints: undefined,
+      content_type: undefined,
+    },
+    {
+      ...filters,
+      title_pattern_hints: undefined,
+      content_type: undefined,
+      track: undefined,
+    },
+    {
+      is_reference_allowed: filters.is_reference_allowed,
+    },
+  ];
+}
+
+async function searchLexicalCandidatesWithFallbacks(
+  params: {
+    query: string;
+    topic?: string;
+    filters: {
+      track?: string;
+      content_type?: string[];
+      title_pattern_hints?: string[];
+      is_reference_allowed?: boolean;
+    };
+    limit?: number;
+  },
+  dependencies: StrategyDependencies,
+): Promise<SimilarSample[]> {
+  const fallbackStages = buildLexicalSearchStages(params.filters);
+  const minimumCandidateCount = Math.min(params.limit ?? 20, 5);
+  let bestCandidates: SimilarSample[] = [];
+
+  for (const stageFilters of fallbackStages) {
+    const candidates = await dependencies.searchLexicalSamples({
+      query: params.query,
+      topic: params.topic,
+      filters: stageFilters,
+      limit: params.limit,
+    });
+
+    if (candidates.length > bestCandidates.length) {
+      bestCandidates = candidates;
+    }
+
+    if (candidates.length >= minimumCandidateCount) {
+      return candidates;
+    }
+  }
+
+  return bestCandidates;
 }
 
 export function selectTaskReferences(
@@ -369,18 +454,51 @@ export async function retrieveTaskReferencesFromUnderstanding(
   dependencies: StrategyDependencies = createDefaultStrategyDependencies(),
   options: RetrieveTaskReferencesOptions = {},
 ): Promise<RetrieveTaskReferencesResult> {
+  const searchModeStatus = dependencies.getSearchModeStatus();
+  const systemFilters = {
+    ...taskUnderstanding.search_filters,
+    is_reference_allowed: true,
+  };
+
+  if (searchModeStatus.searchMode === 'misconfigured') {
+    throw new Error(searchModeStatus.searchModeReason ?? 'Embedding provider is misconfigured.');
+  }
+
+  if (searchModeStatus.searchMode === 'lexical-only') {
+    const similarSamples = await searchLexicalCandidatesWithFallbacks(
+      {
+        query: taskUnderstanding.rewritten_query,
+        topic: options.topic,
+        filters: systemFilters,
+        limit: options.limit,
+      },
+      dependencies,
+    );
+
+    return {
+      searchMode: searchModeStatus.searchMode,
+      searchModeReason: searchModeStatus.searchModeReason,
+      referenceMode: resolveReferenceMode(
+        similarSamples,
+        options.zeroShotThreshold ?? 0.35,
+      ),
+      similarSamples,
+      taskUnderstanding,
+      taskEmbedding: [],
+    };
+  }
+
   const taskEmbedding = await dependencies.createTaskEmbedding(taskUnderstanding.rewritten_query);
   const similarSamples = await dependencies.searchSimilarSamples({
     taskEmbedding,
-    filters: {
-      ...taskUnderstanding.search_filters,
-      is_reference_allowed: true,
-    },
+    filters: systemFilters,
     limit: options.limit,
     similarityThreshold: 0,
   });
 
   return {
+    searchMode: searchModeStatus.searchMode,
+    searchModeReason: searchModeStatus.searchModeReason,
     referenceMode: resolveReferenceMode(
       similarSamples,
       options.zeroShotThreshold ?? 0.6,
@@ -397,5 +515,8 @@ export async function retrieveTaskReferences(
   options: RetrieveTaskReferencesOptions = {},
 ): Promise<RetrieveTaskReferencesResult> {
   const taskUnderstanding = await understandTask(input, dependencies);
-  return retrieveTaskReferencesFromUnderstanding(taskUnderstanding, dependencies, options);
+  return retrieveTaskReferencesFromUnderstanding(taskUnderstanding, dependencies, {
+    ...options,
+    topic: input.topic,
+  });
 }

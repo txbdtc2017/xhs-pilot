@@ -135,7 +135,11 @@ export function createGeneratePostHandler(
               retrieval.referenceMode,
             );
             await dependencies.saveTaskReferences(task.id, referenceSelection);
-            sendEvent('references', referenceSelection);
+            sendEvent('references', {
+              ...referenceSelection,
+              search_mode: retrieval.searchMode,
+              search_mode_reason: retrieval.searchModeReason,
+            });
 
             const referenceBlocks = buildReferenceContextBlocks(
               referenceSelection.selected_references,

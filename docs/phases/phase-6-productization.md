@@ -131,7 +131,7 @@ PWA 不承诺：
 ### 9. Docker 生产镜像优化
 
 - 保留现有多阶段 Dockerfile
-- `docker compose up -d --build` 能启动成功
+- `docker compose up -d --build` 能通过一次性的 `migrate` service 启动成功，避免 `app` / `worker` 并发抢 migration lock
 - `uploads` 使用 bind mount，数据库与 Redis 继续使用命名卷
 - 容器重启后数据不丢失
 
