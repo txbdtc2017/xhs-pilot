@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Product roadmap
+    url: https://github.com/txbdtc2017/xhs-pilot/blob/main/docs/roadmap.md
+    about: 查看哪些能力已明确放入后续 roadmap
+  - name: Release playbook
+    url: https://github.com/txbdtc2017/xhs-pilot/blob/main/docs/release-playbook.md
+    about: 查看发布前检查、tag 和 GitHub Release 流程

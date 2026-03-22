@@ -227,6 +227,12 @@ bash scripts/restore.sh backups/xhs-pilot-YYYYMMDD-HHMMSS.tar.gz --force
 
 维护者发布流程见 [docs/release-playbook.md](docs/release-playbook.md)。
 
+## 反馈与贡献
+
+- 提交 Bug 或功能建议前，建议先看 [docs/roadmap.md](docs/roadmap.md)
+- 贡献方式和提交流程见 [CONTRIBUTING.md](CONTRIBUTING.md)
+- 面向 GitHub 的 release 文案模板见 [docs/release-notes-v0.1.0.md](docs/release-notes-v0.1.0.md)
+
 ## 常见问题
 
 ### 这是桌面软件吗？
