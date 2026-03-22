@@ -33,7 +33,6 @@ USER nextjs
 
 EXPOSE 17789
 
-ENV PORT 17789
 ENV HOSTNAME "0.0.0.0"
 
 CMD ["sh", "-lc", "./scripts/with-env.sh node-pg-migrate up && exec npm run start"]

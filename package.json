@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 17789",
+    "dev": "node --import tsx scripts/run-next.ts dev",
     "build": "next build",
-    "start": "next start --port 17789",
+    "start": "node --import tsx scripts/run-next.ts start",
     "lint": "eslint",
     "test": "node --test --import tsx $(rg --files | rg '\\.test\\.ts$' | tr '\\n' ' ')",
     "check": "npm run lint && npm run test && npm run build",

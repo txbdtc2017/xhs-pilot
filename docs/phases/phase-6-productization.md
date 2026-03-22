@@ -93,9 +93,12 @@ PWA 不承诺：
 - 新增 `.env.example`
 - README 必须覆盖：
   - Docker Compose 一键启动
-  - `npm run seed` 是手动演示数据命令
+  - 默认端口 `17789` 与 `PORT` 注入方式
+  - `npm run seed` 是手动演示数据命令，不承诺检索链路冒烟
+  - Vision provider 独立配置（`VISION_*` 回退到 `LLM_*`）
   - OpenAI / Ollama / DeepSeek / 中转代理配置示例
   - 备份恢复
+  - 手动清理开发环境测试数据
   - same-origin 安全模型
   - 已知限制
 - `docs/roadmap.md` 记录延期项：
@@ -108,6 +111,7 @@ PWA 不承诺：
 
 - 不在 Phase 6 实现自动首启 seed
 - `seed.sh` / `seed.ts` 提供 10-12 条演示样本
+- seed 只负责插入演示样本，不自动补齐分析、embedding 或检索结果
 - 空状态要友好，可选手动 `npm run seed`
 
 ### 8. 端到端验证

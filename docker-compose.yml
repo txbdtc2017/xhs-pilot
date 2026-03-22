@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "17789:17789"
+      - "${PORT:-17789}:${PORT:-17789}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -13,7 +13,7 @@ services:
     env_file:
       - .env
     environment:
-      APP_URL: http://localhost:17789
+      PORT: ${PORT:-17789}
       DB_HOST: postgres
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://${DB_USER:-xhs_pilot}:${DB_PASSWORD:-change-me}@postgres:${DB_PORT:-5432}/${DB_NAME:-xhs_pilot}
@@ -37,7 +37,6 @@ services:
     env_file:
       - .env
     environment:
-      APP_URL: http://localhost:17789
       DB_HOST: postgres
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://${DB_USER:-xhs_pilot}:${DB_PASSWORD:-change-me}@postgres:${DB_PORT:-5432}/${DB_NAME:-xhs_pilot}

@@ -1371,10 +1371,10 @@ cd xhs-pilot
 cp .env.example .env    # 编辑 .env 填入 API Key（或配置本地 Ollama）
 
 # 2. 一键启动（自动建库、迁移、启动所有服务）
-docker compose up -d
+docker compose up -d --build
 
 # 3. 浏览器访问
-open http://localhost:3000
+open http://localhost:17789
 ```
 
 #### Docker Compose 概要
@@ -1383,10 +1383,11 @@ open http://localhost:3000
 services:
   app:                         # Next.js 应用
     build: .
-    ports: ["3000:3000"]
+    ports: ["${PORT:-17789}:${PORT:-17789}"]
     depends_on: [postgres, redis]
     env_file: .env
     environment:               # Docker 内覆盖 .env 的 localhost 默认值
+      - PORT=${PORT:-17789}
       - DB_HOST=postgres
       - REDIS_URL=redis://redis:6379
       - NODE_ENV=production
@@ -1436,8 +1437,8 @@ volumes:
 ```bash
 # ===== 应用 =====
 NODE_ENV=development
-APP_URL=http://localhost:3000
-APP_SECRET=your-random-secret
+# 监听端口请通过 `PORT=3000 npm run dev` 或 `PORT=3000 docker compose up -d --build` 注入，不要写进 .env
+APP_SECRET=your-random-secret         # 当前未被运行时读取，暂保留为兼容字段
 
 # ===== 数据库 =====
 # 本地开发用 localhost，Docker Compose 中会通过 compose 环境覆盖为 postgres
@@ -1459,33 +1460,31 @@ LLM_BASE_URL=https://api.openai.com/v1
 LLM_MODEL_ANALYSIS=gpt-4o              # 分析用模型
 LLM_MODEL_GENERATION=gpt-4o            # 生成用模型
 LLM_MODEL_VISION=gpt-4o                # 多模态用模型
+VISION_API_KEY=${LLM_API_KEY}          # Vision 优先，未配置则回退到 LLM_API_KEY
+VISION_BASE_URL=${LLM_BASE_URL}        # Vision 优先，未配置则回退到 LLM_BASE_URL
 
 # ===== Embedding（同样解耦，支持本地模型） =====
 # 支持：OpenAI / 本地 Ollama + m3e-base / 其他兼容 API
 EMBEDDING_API_KEY=${LLM_API_KEY}
 EMBEDDING_BASE_URL=${LLM_BASE_URL}
 EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_DIMENSIONS=1536              # 向量维度，换模型时需调整
+EMBEDDING_DIMENSIONS=1536              # 当前未被运行时读取，暂保留为兼容字段
 
 # ===== 图片存储 =====
-STORAGE_PROVIDER=local                 # local | s3 | r2
+STORAGE_PROVIDER=local                 # Phase 6 仅支持 local
 STORAGE_LOCAL_PATH=./uploads
-# S3/R2（按需填写）
-S3_ENDPOINT=
-S3_BUCKET=
-S3_ACCESS_KEY=
-S3_SECRET_KEY=
 
 # ===== 运行参数 =====
 MAX_UPLOAD_SIZE_MB=10
-ANALYSIS_CONCURRENCY=2
+ANALYSIS_CONCURRENCY=2                 # 当前未被运行时读取，暂保留为兼容字段
 LOG_LEVEL=info
 ```
 
 > [!IMPORTANT]
 > **运行模式说明**：
 > - **本地开发**（`npm run dev` + 本地 PG/Redis）：直接使用 `.env` 的默认值（`localhost`）
-> - **Docker Compose**（`docker compose up`）：在 `docker-compose.yml` 的 `environment` 中覆盖 `DB_HOST=postgres`、`REDIS_URL=redis://redis:6379`，**不改 `.env` 文件**
+> - **监听端口**：统一由 `PORT` 进程环境控制，默认 `17789`；不要写入 `.env`，因为 Next.js 会在读取 `.env` 之前启动 HTTP server
+> - **Docker Compose**（`docker compose up`）：在 `docker-compose.yml` 的 `environment` 中覆盖 `PORT=${PORT:-17789}`、`DB_HOST=postgres`、`REDIS_URL=redis://redis:6379`，**不改 `.env` 文件**
 >
 > 这样同一份 `.env` 在两种模式下都可用。
 
@@ -1494,7 +1493,7 @@ LOG_LEVEL=info
 > - **Ollama 本地模型**：`LLM_BASE_URL=http://localhost:11434/v1`（Docker 中为 `http://host.docker.internal:11434/v1`）
 > - **DeepSeek**：`LLM_BASE_URL=https://api.deepseek.com`, `LLM_API_KEY=sk-xxx`
 > - **中转代理**：`LLM_BASE_URL=https://your-proxy.com/v1`
-> - Embedding 同理，可独立配置不同服务商
+> - Vision 与 Embedding 同理，可分别独立配置不同服务商
 
 ---
 

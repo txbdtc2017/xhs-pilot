@@ -79,6 +79,12 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+默认监听端口是 `17789`。如果你想改端口，不要把 `PORT` 写进 `.env`，而是在启动命令前显式注入：
+
+```bash
+PORT=3000 docker compose up -d --build
+```
+
 打开：
 
 ```bash
@@ -97,7 +103,7 @@ curl http://localhost:17789/api/health
 npm run seed
 ```
 
-这会插入一组演示样本，用于 Dashboard、样本库和检索链路冒烟，不会在 `docker compose up -d` 时自动执行。
+这会手动插入一组演示样本，方便你快速看到非空页面。它不会在 `docker compose up -d` 时自动执行，也不承诺自动产出分析、embedding 或检索结果。
 
 ## `.env` 核心配置
 
@@ -109,6 +115,8 @@ LLM_API_KEY=sk-xxx
 LLM_MODEL_ANALYSIS=gpt-4o
 LLM_MODEL_GENERATION=gpt-4o
 LLM_MODEL_VISION=gpt-4o
+VISION_API_KEY=${LLM_API_KEY}
+VISION_BASE_URL=${LLM_BASE_URL}
 
 EMBEDDING_BASE_URL=${LLM_BASE_URL}
 EMBEDDING_API_KEY=${LLM_API_KEY}
@@ -118,6 +126,15 @@ EMBEDDING_DIMENSIONS=1536
 STORAGE_PROVIDER=local
 MAX_UPLOAD_SIZE_MB=10
 ```
+
+### 环境变量分类
+
+- 生效字段：`DB_*`、`DATABASE_URL`、`REDIS_URL`、`LLM_*`、`VISION_*`、`EMBEDDING_*`、`STORAGE_PROVIDER`、`STORAGE_LOCAL_PATH`、`MAX_UPLOAD_SIZE_MB`、`LOG_LEVEL`
+- 会被 Docker Compose 覆盖的字段：`DB_HOST`、`REDIS_URL`、`DATABASE_URL`、`PORT`
+- 当前已移除的无效字段：`APP_URL`
+- 当前保留但未被运行时读取的字段：`APP_SECRET`、`ANALYSIS_CONCURRENCY`、`EMBEDDING_DIMENSIONS`
+
+`PORT` 只应通过进程环境注入，例如 `PORT=3000 npm run dev` 或 `PORT=3000 docker compose up -d --build`。不要写进 `.env`，因为 Next.js 会在读取 `.env` 之前启动 HTTP server。
 
 ### OpenAI
 
@@ -157,6 +174,46 @@ LLM_BASE_URL=https://your-proxy.com/v1
 LLM_API_KEY=sk-xxx
 ```
 
+## 图片解析 Vision Provider
+
+### 文本和图片共用同一 provider
+
+```bash
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=sk-xxx
+LLM_MODEL_ANALYSIS=gpt-4o
+LLM_MODEL_GENERATION=gpt-4o
+LLM_MODEL_VISION=gpt-4o
+```
+
+### 文本和图片拆分不同 provider
+
+```bash
+LLM_BASE_URL=https://api.deepseek.com
+LLM_API_KEY=sk-xxx
+LLM_MODEL_ANALYSIS=deepseek-chat
+LLM_MODEL_GENERATION=deepseek-chat
+
+VISION_BASE_URL=https://api.openai.com/v1
+VISION_API_KEY=sk-vision
+LLM_MODEL_VISION=gpt-4o
+```
+
+### 使用本地或代理兼容的多模态模型
+
+```bash
+LLM_BASE_URL=https://your-proxy.com/v1
+LLM_API_KEY=sk-xxx
+LLM_MODEL_ANALYSIS=qwen2.5
+LLM_MODEL_GENERATION=qwen2.5
+
+VISION_BASE_URL=http://host.docker.internal:11434/v1
+VISION_API_KEY=ollama
+LLM_MODEL_VISION=qwen2.5vl
+```
+
+图片解析链路会优先读取 `VISION_API_KEY` / `VISION_BASE_URL`；未设置时，再逐字段回退到 `LLM_API_KEY` / `LLM_BASE_URL`。
+
 ## 产品使用 vs 本地开发
 
 ### 产品使用
@@ -180,6 +237,12 @@ npm run worker:dev
 
 数据库和 Redis 仍然需要你本地可用，或者通过 Docker 单独起起来。
 
+如果本地开发要改监听端口，用进程环境而不是 `.env`：
+
+```bash
+PORT=3000 npm run dev
+```
+
 ## 数据备份与恢复
 
 当前 Phase 6 只支持 `Docker Compose + STORAGE_PROVIDER=local`。
@@ -197,6 +260,38 @@ bash scripts/restore.sh backups/xhs-pilot-YYYYMMDD-HHMMSS.tar.gz --force
 - `database.sql.gz`
 - `uploads.tar.gz`
 - `metadata.json`
+
+## 手动清理当前开发环境测试数据
+
+以下步骤都是手动执行，不会在启动流程中自动触发：
+
+```bash
+# 1. 清空 PostgreSQL 业务数据
+docker compose exec -T postgres psql -U "${DB_USER:-xhs_pilot}" -d "${DB_NAME:-xhs_pilot}" -c "
+  TRUNCATE TABLE
+    samples,
+    sample_images,
+    sample_analysis,
+    sample_visual_analysis,
+    sample_embeddings,
+    style_profiles,
+    style_profile_samples,
+    generation_tasks,
+    task_references,
+    task_strategy,
+    generation_outputs,
+    task_feedback
+  RESTART IDENTITY CASCADE;
+"
+
+# 2. 清空本地上传目录
+rm -rf uploads
+mkdir -p uploads
+
+# 3. 清空 Redis 队列残留
+docker compose exec -T redis sh -lc "redis-cli --scan --pattern 'bull:sample-analyze:*' | xargs -r redis-cli del"
+docker compose exec -T redis sh -lc "redis-cli --scan --pattern 'bull:sample-embed:*' | xargs -r redis-cli del"
+```
 
 ## PWA 说明
 
@@ -252,6 +347,8 @@ bash scripts/restore.sh backups/xhs-pilot-YYYYMMDD-HHMMSS.tar.gz --force
 npm run seed
 ```
 
+这只会插入演示样本，方便确认空状态之外的页面效果；如果你要验证完整分析、embedding 或检索链路，请录入真实样本并让 worker 正常消费队列。
+
 ### 样本一直是 `pending` 怎么办？
 
 优先检查：
@@ -288,7 +385,7 @@ docker compose logs worker --tail=200
 ## 已知限制
 
 - 当前只支持本地文件存储，不支持 `s3/r2`
-- 当前 seed 仅提供演示数据，不会自动触发完整分析结果预烘焙
+- 当前 seed 仅提供演示数据，不承诺自动分析、embedding 或检索可用
 - 历史任务详情入口位于创作工作台内部，不是独立页面
 - 当前仓库以“源码 + Docker Compose”形式分发，不提供桌面安装包
 
