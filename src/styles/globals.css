@@ -169,6 +169,12 @@ textarea {
   gap: var(--spacing-sm);
 }
 
+.app-navMeta {
+  margin-top: auto;
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+}
+
 .app-navLink {
   display: inline-flex;
   align-items: center;

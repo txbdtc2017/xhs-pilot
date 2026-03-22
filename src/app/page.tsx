@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { StatusBadge } from '@/components/status-badge';
-import { getDashboardStats } from '@/lib/dashboard';
+import { type DashboardStats, getDashboardStats } from '@/lib/dashboard';
 import { buildHistoryTaskHref } from './create/history';
 
 export const dynamic = 'force-dynamic';
@@ -13,8 +13,7 @@ function calculateBarWidth(value: number, max: number): string {
   return `${Math.max(8, Math.round((value / max) * 100))}%`;
 }
 
-export default async function Home() {
-  const stats = await getDashboardStats();
+export function HomePageContent({ stats }: { stats: DashboardStats }) {
   const maxTrackCount = Math.max(...stats.track_distribution.map((row) => row.count), 0);
   const maxContentCount = Math.max(...stats.content_type_distribution.map((row) => row.count), 0);
 
@@ -195,4 +194,10 @@ export default async function Home() {
       </section>
     </div>
   );
+}
+
+export default async function Home() {
+  const stats = await getDashboardStats();
+
+  return <HomePageContent stats={stats} />;
 }

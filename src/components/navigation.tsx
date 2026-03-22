@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
+import { APP_VERSION } from '@/lib/app-version';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard' },
@@ -19,14 +20,23 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function Navigation() {
-  const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(false);
+export interface NavigationContentProps {
+  pathname: string;
+  isOpen: boolean;
+  onNavigate?: () => void;
+  onToggle?: () => void;
+}
 
+export function NavigationContent({
+  pathname,
+  isOpen,
+  onNavigate,
+  onToggle,
+}: NavigationContentProps) {
   return (
     <header className="app-nav">
       <div className="app-navHeader">
-        <Link className="brand" href="/" onClick={() => setIsOpen(false)}>
+        <Link className="brand" href="/" onClick={onNavigate}>
           <span className="brandMark">XP</span>
           <span>
             <strong>XHS Pilot</strong>
@@ -39,7 +49,7 @@ export function Navigation() {
           aria-label="切换导航"
           className="navToggle"
           type="button"
-          onClick={() => setIsOpen((current) => !current)}
+          onClick={onToggle}
         >
           <span />
           <span />
@@ -53,12 +63,30 @@ export function Navigation() {
             key={item.href}
             className={`app-navLink ${isActive(pathname, item.href) ? 'app-navLinkActive' : ''}`}
             href={item.href}
-            onClick={() => setIsOpen(false)}
+            onClick={onNavigate}
           >
             {item.label}
           </Link>
         ))}
       </nav>
+
+      <div className="app-navMeta">
+        <span className="badge badgeNeutral">版本 v{APP_VERSION}</span>
+      </div>
     </header>
+  );
+}
+
+export function Navigation() {
+  const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <NavigationContent
+      pathname={pathname}
+      isOpen={isOpen}
+      onNavigate={() => setIsOpen(false)}
+      onToggle={() => setIsOpen((current) => !current)}
+    />
   );
 }
