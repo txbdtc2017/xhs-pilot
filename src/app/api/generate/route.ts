@@ -10,7 +10,6 @@ import {
   type TaskReferencesSelection,
 } from '@/agents/strategy';
 import {
-  buildGenerationPrompt,
   parseGenerationOutput,
   startGenerationTextStream,
   type GenerationOutput,

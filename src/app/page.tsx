@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { StatusBadge } from '@/components/status-badge';
 import { getDashboardStats } from '@/lib/dashboard';
+import { buildHistoryTaskHref } from './create/history';
 
 export const dynamic = 'force-dynamic';
 
@@ -153,13 +154,13 @@ export default async function Home() {
           <div className="listStack">
             {stats.recent_tasks.length > 0 ? (
               stats.recent_tasks.map((task) => (
-                <div className="listRow" key={task.id}>
+                <Link className="listRow linkRow" href={buildHistoryTaskHref(task.id)} key={task.id}>
                   <div>
                     <strong>{task.topic}</strong>
                     <p className="mutedText">{task.reference_mode ?? '未记录参考模式'}</p>
                   </div>
                   <StatusBadge status={task.status} />
-                </div>
+                </Link>
               ))
             ) : (
               <div className="emptyCard">还没有生成任务。</div>

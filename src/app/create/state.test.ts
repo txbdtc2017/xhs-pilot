@@ -110,3 +110,100 @@ test('applyStreamEvent records errors and leaves the latest content visible', ()
   assert.equal(state.error, 'generation failed');
   assert.equal(state.generationText, '已经生成的内容');
 });
+
+test('createPageReducer stores history list and selected task detail without clearing live form state', () => {
+  let state = createInitialCreateState();
+  state = createPageReducer(state, {
+    type: 'form_changed',
+    field: 'topic',
+    value: '保留当前主题',
+  });
+  state = createPageReducer(state, { type: 'history_list_requested' });
+  state = createPageReducer(state, {
+    type: 'history_list_loaded',
+    tasks: [
+      {
+        id: 'task-1',
+        topic: '历史任务一',
+        status: 'completed',
+        reference_mode: 'referenced',
+        created_at: '2026-03-22T10:00:00.000Z',
+      },
+    ],
+  });
+  state = createPageReducer(state, { type: 'history_detail_requested', taskId: 'task-1' });
+  state = createPageReducer(state, {
+    type: 'history_detail_loaded',
+    taskId: 'task-1',
+    detail: {
+      task: {
+        id: 'task-1',
+        topic: '历史任务一',
+        status: 'completed',
+        reference_mode: 'referenced',
+      },
+      strategy: {
+        strategy_summary: '策略摘要',
+        title_strategy: '结果先行',
+      },
+      references: [
+        {
+          sample_id: 'sample-1',
+          title: '参考样本',
+          reference_type: 'title',
+          reason: '标题节奏',
+        },
+      ],
+      outputs: createGenerationComplete(),
+      reference_mode: 'referenced',
+      feedback: null,
+    },
+  });
+
+  assert.equal(state.form.topic, '保留当前主题');
+  assert.equal(state.isHistoryLoading, false);
+  assert.equal(state.historyTasks.length, 1);
+  assert.equal(state.selectedHistoryTaskId, 'task-1');
+  assert.equal(state.selectedHistoryDetail?.task.topic, '历史任务一');
+  assert.equal(state.selectedHistoryDetail?.references[0]?.title, '参考样本');
+});
+
+test('submit_started preserves loaded history data while resetting the live generation pane', () => {
+  let state = createPageReducer(createInitialCreateState(), {
+    type: 'history_list_loaded',
+    tasks: [
+      {
+        id: 'task-1',
+        topic: '历史任务一',
+        status: 'completed',
+        reference_mode: 'referenced',
+        created_at: '2026-03-22T10:00:00.000Z',
+      },
+    ],
+  });
+  state = createPageReducer(state, {
+    type: 'history_detail_loaded',
+    taskId: 'task-1',
+    detail: {
+      task: {
+        id: 'task-1',
+        topic: '历史任务一',
+        status: 'completed',
+        reference_mode: 'referenced',
+      },
+      strategy: { strategy_summary: '策略摘要' },
+      references: [],
+      outputs: createGenerationComplete(),
+      reference_mode: 'referenced',
+      feedback: null,
+    },
+  });
+  state = createPageReducer(state, { type: 'submit_started' });
+
+  assert.equal(state.isSubmitting, true);
+  assert.equal(state.generationText, '');
+  assert.equal(state.outputs, null);
+  assert.equal(state.historyTasks.length, 1);
+  assert.equal(state.selectedHistoryTaskId, 'task-1');
+  assert.equal(state.selectedHistoryDetail?.task.topic, '历史任务一');
+});

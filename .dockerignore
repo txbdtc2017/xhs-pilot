@@ -1,0 +1,12 @@
+.git
+.next
+node_modules
+uploads
+backups
+.env
+.env.*
+*.log
+*.tsbuildinfo
+dev.log
+worker.log
+coverage

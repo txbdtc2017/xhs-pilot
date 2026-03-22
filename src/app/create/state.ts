@@ -57,6 +57,29 @@ export interface GenerationCompletePayload {
   image_suggestions: string;
 }
 
+export interface HistoryTaskSummary {
+  id: string;
+  topic: string;
+  status: string;
+  reference_mode: string | null;
+  created_at: string;
+}
+
+export interface HistoryTaskDetail {
+  task: {
+    id: string;
+    topic: string;
+    status: string;
+    reference_mode?: string | null;
+    [key: string]: unknown;
+  };
+  strategy: Record<string, unknown> | null;
+  references: Array<Record<string, unknown>>;
+  outputs: GenerationCompletePayload | null;
+  reference_mode: string | null;
+  feedback: Record<string, unknown> | null;
+}
+
 export interface CreatePageState {
   form: CreateFormValues;
   isSubmitting: boolean;
@@ -68,6 +91,11 @@ export interface CreatePageState {
   strategySnapshot: StrategySnapshotPayload | null;
   generationText: string;
   outputs: GenerationCompletePayload | null;
+  historyTasks: HistoryTaskSummary[];
+  isHistoryLoading: boolean;
+  historyError: string | null;
+  selectedHistoryTaskId: string | null;
+  selectedHistoryDetail: HistoryTaskDetail | null;
 }
 
 export type CreateStreamEvent =
@@ -83,7 +111,12 @@ export type CreatePageAction =
   | { type: 'form_changed'; field: keyof CreateFormValues; value: string | boolean }
   | { type: 'submit_started' }
   | { type: 'submit_failed'; message: string }
-  | { type: 'stream_event'; event: CreateStreamEvent['event']; data: CreateStreamEvent['data'] };
+  | { type: 'stream_event'; event: CreateStreamEvent['event']; data: CreateStreamEvent['data'] }
+  | { type: 'history_list_requested' }
+  | { type: 'history_list_loaded'; tasks: HistoryTaskSummary[] }
+  | { type: 'history_detail_requested'; taskId: string }
+  | { type: 'history_detail_loaded'; taskId: string; detail: HistoryTaskDetail }
+  | { type: 'history_failed'; message: string };
 
 export function createInitialCreateState(): CreatePageState {
   return {
@@ -104,6 +137,11 @@ export function createInitialCreateState(): CreatePageState {
     strategySnapshot: null,
     generationText: '',
     outputs: null,
+    historyTasks: [],
+    isHistoryLoading: false,
+    historyError: null,
+    selectedHistoryTaskId: null,
+    selectedHistoryDetail: null,
   };
 }
 
@@ -195,6 +233,40 @@ export function createPageReducer(
         isSubmitting: false,
         step: 'failed',
         error: action.message,
+      };
+    case 'history_list_requested':
+      return {
+        ...state,
+        isHistoryLoading: true,
+        historyError: null,
+      };
+    case 'history_list_loaded':
+      return {
+        ...state,
+        historyTasks: action.tasks,
+        isHistoryLoading: false,
+        historyError: null,
+      };
+    case 'history_detail_requested':
+      return {
+        ...state,
+        selectedHistoryTaskId: action.taskId,
+        isHistoryLoading: true,
+        historyError: null,
+      };
+    case 'history_detail_loaded':
+      return {
+        ...state,
+        selectedHistoryTaskId: action.taskId,
+        selectedHistoryDetail: action.detail,
+        isHistoryLoading: false,
+        historyError: null,
+      };
+    case 'history_failed':
+      return {
+        ...state,
+        isHistoryLoading: false,
+        historyError: action.message,
       };
     case 'stream_event':
       return applyStreamEvent(state, action as unknown as CreateStreamEvent);

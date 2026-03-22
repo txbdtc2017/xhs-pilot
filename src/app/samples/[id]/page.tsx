@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { SampleEditForm } from '@/components/sample-edit-form';
 import { StatusBadge } from '@/components/status-badge';
+import { buildHistoryTaskHref } from '@/app/create/history';
 import { getSampleDetail } from '@/lib/samples';
 
 export const dynamic = 'force-dynamic';
@@ -259,7 +260,11 @@ export default async function SampleDetailPage({ params }: SampleDetailPageProps
               <div className="listStack">
                 {detail.referenced_by_tasks.length > 0 ? (
                   detail.referenced_by_tasks.map((task) => (
-                    <div className="listRow" key={`${task.task_id}-${task.reference_type}`}>
+                    <Link
+                      className="listRow linkRow"
+                      href={buildHistoryTaskHref(String(task.task_id))}
+                      key={`${task.task_id}-${task.reference_type}`}
+                    >
                       <div>
                         <strong>{task.topic}</strong>
                         <p className="mutedText">
@@ -268,7 +273,7 @@ export default async function SampleDetailPage({ params }: SampleDetailPageProps
                         </p>
                       </div>
                       <StatusBadge status={task.status} />
-                    </div>
+                    </Link>
                   ))
                 ) : (
                   <div className="emptyCard">还没有生成任务引用它。</div>

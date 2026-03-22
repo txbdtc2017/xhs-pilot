@@ -44,6 +44,13 @@
   align-items: start;
 }
 
+.historyGrid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(420px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
 .panel {
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(238, 238, 238, 0.9);
@@ -235,6 +242,49 @@
   background: rgba(255, 255, 255, 0.72);
 }
 
+.historyTaskButton {
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 14px;
+  background: white;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.historyTaskButton:hover {
+  border-color: rgba(255, 36, 66, 0.28);
+  transform: translateY(-1px);
+}
+
+.historyTaskButtonActive {
+  border-color: rgba(255, 36, 66, 0.44);
+  box-shadow: 0 10px 24px rgba(255, 36, 66, 0.1);
+  background: linear-gradient(180deg, rgba(255, 245, 246, 0.98), rgba(255, 255, 255, 0.98));
+}
+
+.historyTaskHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.historyTaskStatus {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.historyTaskMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
 .errorBox {
   border-radius: 16px;
   padding: 14px;
@@ -249,6 +299,10 @@
 
 @media (max-width: 1180px) {
   .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .historyGrid {
     grid-template-columns: 1fr;
   }
 }

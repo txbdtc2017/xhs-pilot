@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>XHS Pilot Icon 512</title>
+  <rect width="512" height="512" rx="112" fill="#ff2442" />
+  <rect x="48" y="48" width="416" height="416" rx="88" fill="#fff8f1" />
+  <path d="M150 150h68l47 74 48-74h48l-72 109 78 103h-68l-55-76-54 76h-70l79-108-61-104Z" fill="#ff2442" />
+  <circle cx="322" cy="350" r="42" fill="#111111" opacity=".12" />
+</svg>

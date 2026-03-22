@@ -1,6 +1,6 @@
 # Phase 6：产品化收尾
 
-> **目标**：从"能用"升级到"可发布的开源产品" — 备份恢复、PWA、文档、最终验证。
+> **目标**：基于已完成的 Phase 1-5 实现，把系统收口为一个可发布、可部署、可验证的开源产品版本。
 
 ## 前序依赖
 
@@ -15,108 +15,138 @@ Phase 5 完成（所有 UI 页面可用，系统功能完整）
 
 ## 具体任务
 
-### 1. 数据备份与恢复脚本
+### 1. 运行时与部署真相对齐
 
-**`scripts/backup.sh`**：
-```bash
-# 导出 PostgreSQL 数据
-pg_dump + 压缩
-# 打包图片目录
-tar uploads/
-# 生成带时间戳的归档文件
-```
+- 官方支持部署方式固定为：`Docker Compose`
+- 官方支持存储方式固定为：`STORAGE_PROVIDER=local`
+- 新增 `GET /uploads/[...path]`，对既有 `/uploads/...` 图片 URL 提供本地文件访问能力
+- 保留 `./uploads:/app/uploads` bind mount
+- 新增 `.dockerignore`，避免 `.env`、`.next`、`uploads`、日志等进入构建上下文
+- 若 `STORAGE_PROVIDER` 不是 `local`，应用启动时直接报错，不再伪装支持 `s3/r2`
 
-**`scripts/restore.sh`**：
-```bash
-# 从归档文件恢复 PostgreSQL 数据
-# 恢复图片目录
-```
+### 2. 数据备份与恢复脚本
 
-两个脚本必须：
-- 支持 Docker 环境（通过 `docker exec` 执行）
-- 有清晰的使用说明输出
-- 生成带日期的归档文件名
+**`scripts/backup.sh`** 必须：
+- 仅支持 `Docker Compose + STORAGE_PROVIDER=local`
+- 检查 Compose 服务是否运行
+- 导出 PostgreSQL 为 `database.sql.gz`
+- 打包 `./uploads` 为 `uploads.tar.gz`
+- 生成 `metadata.json`
+- 最终产出 `backups/xhs-pilot-YYYYMMDD-HHMMSS.tar.gz`
+- 提供 `--help`
 
-### 2. PWA 配置
+**`scripts/restore.sh`** 必须：
+- 要求传入归档路径和 `--force`
+- 校验归档结构完整
+- 重建 `public schema` 后再导入 SQL
+- 恢复本地 `./uploads`
+- 若 `STORAGE_PROVIDER!=local` 直接拒绝执行
+- 提供 `--help`
 
-- `public/manifest.json` — 应用名称 "XHS Pilot"、图标、主题色
-- 配置 `next-pwa`（或手动 Service Worker）
-- 移动端"添加到主屏幕"可用
-- 离线时显示友好提示页面
+### 3. 上传限制与安全硬化
 
-### 3. 安全检查
+- 样本上传仅允许 `image/jpeg`、`image/png`、`image/webp`
+- 单文件大小读取 `MAX_UPLOAD_SIZE_MB`
+- 单次上传最多 9 张图
+- MIME 缺失、空文件、扩展名与 MIME 不匹配时直接拒绝
+- API 保持 same-origin，不额外开放 CORS
+- 增加基础安全头：
+  - `X-Content-Type-Options`
+  - `Referrer-Policy`
+  - `X-Frame-Options`
+- `sw.js` 返回 no-cache 头，避免旧 Service Worker 长驻
+- LLM Key 仅允许服务端读取，不引入任何 `NEXT_PUBLIC_*` secret
 
-- 确认 `.env` 不在版本控制中（`.gitignore` 包含）
-- 确认文件上传限制生效（类型 + 大小）
-- 确认 LLM API Key 不暴露在前端代码中
-- 检查 CORS 配置
+### 4. PWA 配置
 
-### 4. README.md
+- 不使用 `next-pwa`
+- 使用 `app/manifest.ts` 生成 manifest
+- 使用 `public/sw.js` 实现最小 Service Worker
+- 使用 `app/offline/page.tsx` 作为离线提示页
+- 提供 `public/icons/` 图标资源
+- 浏览器“添加到主屏幕”可用
+- 导航请求失败时回退到 `/offline`
 
-编写面向开源用户的 README：
+PWA 只承诺：
+- 可安装
+- 可缓存静态壳
+- 离线时有友好提示
 
-```markdown
-# XHS Pilot
+PWA 不承诺：
+- 离线生成
+- 离线样本浏览
+- 离线数据库或队列执行
 
-一句话介绍
+### 5. 历史链路查看入口
 
-## 功能特性（截图/GIF）
+- 不新增新的主导航页面
+- 复用现有：
+  - `GET /api/generate/history`
+  - `GET /api/generate/[taskId]`
+- 在 `/create` 内增加历史任务区和详情区
+- 支持 `/create?taskId=<id>` 深链
+- Dashboard 的最近任务和样本详情里的引用任务，都跳转到 `/create?taskId=<id>`
 
-## 快速开始（3 步）
+### 6. README、示例配置与 roadmap
 
-## 配置说明
-  - 使用 OpenAI
-  - 使用 Ollama 本地模型
-  - 使用 DeepSeek
-  - 使用中转代理
+- README 需以仓库真实实现为准，而不是早期计划描述
+- 新增 `.env.example`
+- README 必须覆盖：
+  - Docker Compose 一键启动
+  - `npm run seed` 是手动演示数据命令
+  - OpenAI / Ollama / DeepSeek / 中转代理配置示例
+  - 备份恢复
+  - same-origin 安全模型
+  - 已知限制
+- `docs/roadmap.md` 记录延期项：
+  - `s3/r2` 支持与 provider-aware 备份恢复
+  - 首启自动 demo bootstrap
+  - 独立历史页 / 对比 / 导出
+  - 更强部署安全选项
 
-## 数据备份与恢复
+### 7. 冷启动体验
 
-## 技术栈
+- 不在 Phase 6 实现自动首启 seed
+- `seed.sh` / `seed.ts` 提供 10-12 条演示样本
+- 空状态要友好，可选手动 `npm run seed`
 
-## License
-```
+### 8. 端到端验证
 
-### 5. 冷启动体验优化
+至少覆盖：
 
-- 确认 `seed.sh` 脚本能正确预置 10-20 篇高质量样本
-- 数据库初始化时自动执行 seed
-- 首次访问 Dashboard 不是空白页面
+1. 录入一篇带图样本，图片可正常访问
+2. 样本进入分析队列，详情页可查看结构化结果
+3. 创作时能检索到相关样本
+4. 策略区可看到任务理解、参考、策略快照
+5. 生成结果区可看到流式输出和结构化结果
+6. 在 `/create?taskId=<id>` 查看完整历史链路
+7. `bash scripts/backup.sh` 和 `bash scripts/restore.sh ... --force` 可执行
+8. PWA 可安装，断网后进入 `/offline`
 
-### 6. 端到端验证
+### 9. Docker 生产镜像优化
 
-按 Phase 1 验收标准完整走一遍：
-
-1. **沉淀**：录入一篇爆文 → 自动分析 → 查看详情页分析结果
-2. **理解**：分析结果结构化展示 → 标签 + 摘要 正确
-3. **检索**：创作时输入相关主题 → 检索到该样本
-4. **策略**：策略透明展示 → 标注了参考来源
-5. **生成**：流式输出 → 标题 5 个 + 正文 + 封面文案 + 标签 + 首评
-6. **闭环**：在历史任务中能查看完整链路
-
-### 7. Docker 生产镜像优化
-
-- 多阶段构建 Dockerfile（减小镜像大小）
-- 确认 `docker compose up -d` 一键启动无报错
-- 确认容器重启后数据不丢失（Volume 挂载正确）
+- 保留现有多阶段 Dockerfile
+- `docker compose up -d --build` 能启动成功
+- `uploads` 使用 bind mount，数据库与 Redis 继续使用命名卷
+- 容器重启后数据不丢失
 
 ## 禁止事项 ❌
 
 - ❌ 不要添加新功能
 - ❌ 不要修改核心业务逻辑
 - ❌ 不要引入用户认证
-- ❌ 不要实现 Phase 2/3 的功能
+- ❌ 不要在本阶段强行实现 `s3/r2`
+- ❌ 不要实现自动首启 seed
+- ❌ 不要补做 Phase 2/3 才应该出现的能力
 
 ## 验收检查清单 ✅
 
-- [ ] `scripts/backup.sh` 能成功导出数据
-- [ ] `scripts/restore.sh` 能成功恢复数据
-- [ ] PWA 可安装到手机主屏幕
-- [ ] README.md 完整且包含 Ollama/DeepSeek 配置示例
-- [ ] `.env` 不在 git 仓库中
-- [ ] 文件上传大小限制生效
-- [ ] seed 脚本预置的样本在 Dashboard 上能看到
-- [ ] 端到端验证 6 步全部通过
-- [ ] `docker compose up -d` 从零一键启动成功
-- [ ] 容器重启后数据完好
-- [ ] 开源用户修改 `.env` 中的 `LLM_BASE_URL` 后能正常使用
+- [ ] `GET /uploads/[...path]` 能正常返回本地图片
+- [ ] `scripts/backup.sh` 能导出 `database.sql.gz`、`uploads.tar.gz`、`metadata.json`
+- [ ] `scripts/restore.sh` 仅在 `--force` 下执行并成功恢复
+- [ ] 上传限制生效：类型 / 大小 / 数量
+- [ ] PWA 可安装，离线时进入 `/offline`
+- [ ] `/create?taskId=<id>` 可查看完整链路
+- [ ] README、`.env.example`、`docs/roadmap.md` 与现状一致
+- [ ] `docker compose up -d --build` 一键启动成功
+- [ ] `npm run check` 通过

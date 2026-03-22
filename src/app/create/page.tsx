@@ -1,7 +1,14 @@
 'use client'
 
-import { startTransition, useDeferredValue, useReducer } from 'react';
+import { Suspense, startTransition, useDeferredValue, useEffect, useReducer } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createSseParser } from '@/lib/sse';
+import {
+  buildHistoryTaskHref,
+  fetchHistoryTaskDetail,
+  fetchHistoryTasks,
+  normalizeHistoryTaskId,
+} from './history';
 import {
   createInitialCreateState,
   createPageReducer,
@@ -31,9 +38,107 @@ function renderPill(step: string, currentStep: string) {
   return <span className={`${styles.pill} ${styles.pillIdle}`}>待开始</span>;
 }
 
-export default function CreatePage() {
+function readHistoryString(record: Record<string, unknown> | null | undefined, key: string): string {
+  if (!record) {
+    return '';
+  }
+
+  const value = record[key];
+  return typeof value === 'string' ? value : '';
+}
+
+function readHistoryBoolean(record: Record<string, unknown> | null | undefined, key: string): boolean {
+  return Boolean(record?.[key]);
+}
+
+function formatHistoryDate(value: string | null | undefined): string {
+  if (!value) {
+    return '未知时间';
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '未知时间' : date.toLocaleString('zh-CN');
+}
+
+function CreatePageClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [state, dispatch] = useReducer(createPageReducer, undefined, createInitialCreateState);
   const deferredGenerationText = useDeferredValue(state.generationText);
+  const requestedHistoryTaskId = normalizeHistoryTaskId(searchParams.get('taskId'));
+
+  useEffect(() => {
+    let isMounted = true;
+
+    dispatch({ type: 'history_list_requested' });
+    void fetchHistoryTasks()
+      .then((tasks) => {
+        if (!isMounted) {
+          return;
+        }
+
+        dispatch({ type: 'history_list_loaded', tasks });
+      })
+      .catch((error) => {
+        if (!isMounted) {
+          return;
+        }
+
+        dispatch({ type: 'history_failed', message: getErrorMessage(error) });
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const preferredHistoryTaskId =
+    requestedHistoryTaskId ?? state.selectedHistoryTaskId ?? state.historyTasks[0]?.id ?? null;
+
+  useEffect(() => {
+    if (!preferredHistoryTaskId) {
+      return;
+    }
+
+    if (state.selectedHistoryDetail?.task.id === preferredHistoryTaskId) {
+      return;
+    }
+
+    let isMounted = true;
+    dispatch({ type: 'history_detail_requested', taskId: preferredHistoryTaskId });
+
+    void fetchHistoryTaskDetail(preferredHistoryTaskId)
+      .then((detail) => {
+        if (!isMounted) {
+          return;
+        }
+
+        dispatch({
+          type: 'history_detail_loaded',
+          taskId: preferredHistoryTaskId,
+          detail,
+        });
+      })
+      .catch((error) => {
+        if (!isMounted) {
+          return;
+        }
+
+        dispatch({ type: 'history_failed', message: getErrorMessage(error) });
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [preferredHistoryTaskId, state.selectedHistoryDetail?.task.id]);
+
+  useEffect(() => {
+    if (!state.taskId || requestedHistoryTaskId === state.taskId) {
+      return;
+    }
+
+    router.replace(buildHistoryTaskHref(state.taskId));
+  }, [requestedHistoryTaskId, router, state.taskId]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -102,6 +207,10 @@ export default function CreatePage() {
         message: getErrorMessage(error),
       });
     }
+  }
+
+  function handleHistorySelect(taskId: string) {
+    router.replace(buildHistoryTaskHref(taskId));
   }
 
   return (
@@ -411,7 +520,188 @@ export default function CreatePage() {
             )}
           </section>
         </div>
+
+        <section className={styles.historyGrid}>
+          <section className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <div className={styles.panelTitle}>历史任务</div>
+              <div className={styles.panelHint}>复用现有生成历史 API，选中后在右侧查看完整链路。</div>
+            </div>
+
+            {state.historyError ? <div className={styles.errorBox}>{state.historyError}</div> : null}
+
+            {state.historyTasks.length > 0 ? (
+              <div className={styles.list}>
+                {state.historyTasks.map((task) => {
+                  const isActive = task.id === preferredHistoryTaskId;
+
+                  return (
+                    <button
+                      key={task.id}
+                      className={`${styles.historyTaskButton} ${isActive ? styles.historyTaskButtonActive : ''}`}
+                      type="button"
+                      onClick={() => handleHistorySelect(task.id)}
+                    >
+                      <div className={styles.historyTaskHeader}>
+                        <strong>{task.topic}</strong>
+                        <span className={styles.historyTaskStatus}>{task.status}</span>
+                      </div>
+                      <div className={styles.historyTaskMeta}>
+                        <span>{task.reference_mode ?? '未记录参考模式'}</span>
+                        <span>{formatHistoryDate(task.created_at)}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>
+                {state.isHistoryLoading ? '正在加载历史任务…' : '还没有可查看的历史任务。'}
+              </div>
+            )}
+          </section>
+
+          <section className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <div className={styles.panelTitle}>历史链路详情</div>
+              <div className={styles.panelHint}>展示任务输入、参考模式、参考样本、策略、输出与反馈。</div>
+            </div>
+
+            {state.selectedHistoryDetail ? (
+              <div className={styles.list}>
+                <div className={styles.kvList}>
+                  <div className={styles.kvItem}>
+                    <div className={styles.kvLabel}>主题</div>
+                    <div className={styles.kvValue}>{state.selectedHistoryDetail.task.topic}</div>
+                  </div>
+                  <div className={styles.kvItem}>
+                    <div className={styles.kvLabel}>状态 / 参考模式</div>
+                    <div className={styles.kvValue}>
+                      {[state.selectedHistoryDetail.task.status, state.selectedHistoryDetail.reference_mode]
+                        .filter(Boolean)
+                        .join(' · ') || '未记录'}
+                    </div>
+                  </div>
+                  <div className={styles.kvItem}>
+                    <div className={styles.kvLabel}>目标人群 / 目标效果</div>
+                    <div className={styles.kvValue}>
+                      {[
+                        readHistoryString(state.selectedHistoryDetail.task, 'target_audience'),
+                        readHistoryString(state.selectedHistoryDetail.task, 'goal'),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ') || '未记录'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className={styles.resultCard}>
+                  <strong>参考样本</strong>
+                  {state.selectedHistoryDetail.references.length > 0 ? (
+                    state.selectedHistoryDetail.references.map((reference, index) => (
+                      <div key={`${readHistoryString(reference, 'sample_id')}-${index}`}>
+                        <strong>{readHistoryString(reference, 'title') || '未命名样本'}</strong>
+                        <div className={styles.referenceMeta}>
+                          <span>{readHistoryString(reference, 'reference_type') || 'unknown'}</span>
+                          <span>{readHistoryString(reference, 'reason') || '未记录原因'}</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className={styles.panelHint}>本次任务未引用样本，属于 zero-shot 或未记录场景。</div>
+                  )}
+                </div>
+
+                <div className={styles.resultCard}>
+                  <strong>策略摘要</strong>
+                  <div className={styles.kvList}>
+                    <div className={styles.kvItem}>
+                      <div className={styles.kvLabel}>概览</div>
+                      <div className={styles.kvValue}>
+                        {readHistoryString(state.selectedHistoryDetail.strategy, 'strategy_summary') || '未记录'}
+                      </div>
+                    </div>
+                    <div className={styles.kvItem}>
+                      <div className={styles.kvLabel}>标题 / 结构 / CTA</div>
+                      <div className={styles.kvValue}>
+                        {[
+                          readHistoryString(state.selectedHistoryDetail.strategy, 'title_strategy'),
+                          readHistoryString(state.selectedHistoryDetail.strategy, 'structure_strategy'),
+                          readHistoryString(state.selectedHistoryDetail.strategy, 'cta_strategy'),
+                        ]
+                          .filter(Boolean)
+                          .join('\n') || '未记录'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={styles.resultCard}>
+                  <strong>生成结果</strong>
+                  {state.selectedHistoryDetail.outputs ? (
+                    <div className={styles.list}>
+                      <div>标题：{state.selectedHistoryDetail.outputs.titles.join(' / ') || '未记录'}</div>
+                      <div>开头：{state.selectedHistoryDetail.outputs.openings.join(' / ') || '未记录'}</div>
+                      <div>正文：{state.selectedHistoryDetail.outputs.body_versions[0] || '未记录'}</div>
+                      <div>CTA：{state.selectedHistoryDetail.outputs.cta_versions.join(' / ') || '未记录'}</div>
+                      <div>标签：{state.selectedHistoryDetail.outputs.hashtags.join(' ') || '未记录'}</div>
+                      <div>首评：{state.selectedHistoryDetail.outputs.first_comment || '未记录'}</div>
+                    </div>
+                  ) : (
+                    <div className={styles.panelHint}>当前任务还没有持久化的生成输出。</div>
+                  )}
+                </div>
+
+                <div className={styles.resultCard}>
+                  <strong>反馈</strong>
+                  {state.selectedHistoryDetail.feedback ? (
+                    <div className={styles.kvList}>
+                      <div className={styles.kvItem}>
+                        <div className={styles.kvLabel}>是否已发布</div>
+                        <div className={styles.kvValue}>
+                          {readHistoryBoolean(state.selectedHistoryDetail.feedback, 'used_in_publish') ? '已发布' : '未发布'}
+                        </div>
+                      </div>
+                      <div className={styles.kvItem}>
+                        <div className={styles.kvLabel}>主观反馈</div>
+                        <div className={styles.kvValue}>
+                          {readHistoryString(state.selectedHistoryDetail.feedback, 'manual_feedback') || '未填写'}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={styles.panelHint}>当前任务还没有反馈数据。</div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className={styles.emptyState}>
+                {state.isHistoryLoading ? '正在加载历史链路…' : '从左侧选择一条历史任务查看完整链路。'}
+              </div>
+            )}
+          </section>
+        </section>
       </div>
     </main>
+  );
+}
+
+export default function CreatePage() {
+  return (
+    <Suspense
+      fallback={(
+        <main className={styles.page}>
+          <div className={styles.shell}>
+            <header className={styles.hero}>
+              <p className={styles.eyebrow}>Phase 4 Creation Studio</p>
+              <h1 className={styles.title}>让策略可见，让生成可追踪。</h1>
+              <p className={styles.subtitle}>正在加载创作工作台…</p>
+            </header>
+          </div>
+        </main>
+      )}
+    >
+      <CreatePageClient />
+    </Suspense>
   );
 }

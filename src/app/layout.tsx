@@ -1,11 +1,10 @@
 import type { Metadata } from 'next';
 import '../styles/globals.css';
 import { Navigation } from '@/components/navigation';
+import { PwaRegister } from '@/components/pwa-register';
+import { appMetadata } from './metadata';
 
-export const metadata: Metadata = {
-  title: 'XHS Pilot',
-  description: '小红书内容资产、检索与创作工作台。',
-};
+export const metadata: Metadata = appMetadata;
 
 export default function RootLayout({
   children,
@@ -15,6 +14,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
+        <PwaRegister />
         <div className="appLayout">
           <Navigation />
           <main className="appContent">{children}</main>

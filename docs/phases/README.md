@@ -19,7 +19,7 @@
 | 3 | `phase-3-retrieval.md` | 检索层（结构化 + 向量 + 降级） | 1 天 |
 | 4 | `phase-4-creation-studio.md` | 创作工作台（核心交互页） | 2-3 天 |
 | 5 | `phase-5-ui-pages.md` | Dashboard + 样本库 + 详情 + 画像 | 2 天 |
-| 6 | `phase-6-productization.md` | 产品化收尾（备份/PWA/LLM解耦） | 1 天 |
+| 6 | `phase-6-productization.md` | 产品化收尾（本地存储/备份/PWA/文档） | 1 天 |
 
 ## 依赖关系
 
