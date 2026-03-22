@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import '../styles/globals.css';
+import { Navigation } from '@/components/navigation';
 
 export const metadata: Metadata = {
   title: 'XHS Pilot',
-  description: 'Phase 1 scaffold for the XHS Pilot project.',
+  description: '小红书内容资产、检索与创作工作台。',
 };
 
 export default function RootLayout({
@@ -13,7 +14,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <div className="appLayout">
+          <Navigation />
+          <main className="appContent">{children}</main>
+        </div>
+      </body>
     </html>
   );
 }
