@@ -73,4 +73,6 @@
 | 自动 demo bootstrap | 首启自动注入演示数据，以及带分析结果 / embedding 的数据包 |
 | 历史任务独立页面 | 当前在 `/create` 内提供只读历史链路；独立页面、版本对比和导出延后 |
 | 更强部署安全 | Basic Auth、反向代理模板、可选速率限制和公网暴露指引 |
-| README 截图 / GIF | 当前先保证信息准确，后续补充稳定的产品截图与演示素材 |
+| GHCR / Docker Hub 镜像发布 | 当前先以源码仓库 + Docker Compose 形式发布，后续再提供预构建镜像 |
+| GitHub Release 自动化 | 当前以手工 tag + Release 为主，后续可加入自动生成 Release Notes 和 tag 校验 |
+| 桌面安装包研究 | Electron / Tauri 属于后续新产品线，不属于当前自托管 Web 应用版本 |

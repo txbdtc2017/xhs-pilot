@@ -18,6 +18,8 @@ services:
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://${DB_USER:-xhs_pilot}:${DB_PASSWORD:-change-me}@postgres:${DB_PORT:-5432}/${DB_NAME:-xhs_pilot}
       NODE_ENV: production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./uploads:/app/uploads
     restart: always
@@ -40,6 +42,8 @@ services:
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://${DB_USER:-xhs_pilot}:${DB_PASSWORD:-change-me}@postgres:${DB_PORT:-5432}/${DB_NAME:-xhs_pilot}
       NODE_ENV: production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./uploads:/app/uploads
     restart: always
