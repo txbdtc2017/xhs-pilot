@@ -15,28 +15,21 @@ export function resolveSearchModeStatus(
 ): SearchModeStatus {
   const embeddingApiKey = resolveEnvValue(env.EMBEDDING_API_KEY);
   const embeddingBaseUrl = resolveEnvValue(env.EMBEDDING_BASE_URL);
-  const embeddingModel = resolveEnvValue(env.EMBEDDING_MODEL) ?? DEFAULT_EMBEDDING_MODEL;
+  const embeddingModel = resolveEnvValue(env.EMBEDDING_MODEL);
+  const resolvedEmbeddingModel = embeddingModel ?? DEFAULT_EMBEDDING_MODEL;
 
-  if (!embeddingApiKey && !embeddingBaseUrl && !resolveEnvValue(env.EMBEDDING_MODEL)) {
+  if (!embeddingApiKey || !embeddingBaseUrl || !embeddingModel) {
     return {
       searchMode: 'lexical-only',
-      searchModeReason: 'EMBEDDING_* 未配置，已切换到 lexical-only 检索。',
-      embeddingModel,
-    };
-  }
-
-  if (!embeddingApiKey) {
-    return {
-      searchMode: 'misconfigured',
-      searchModeReason: 'EMBEDDING_API_KEY is required when embedding is enabled.',
-      embeddingModel,
+      searchModeReason: 'EMBEDDING_* 未完整配置，已切换到 lexical-only 检索。',
+      embeddingModel: resolvedEmbeddingModel,
     };
   }
 
   return {
     searchMode: 'hybrid',
     searchModeReason: null,
-    embeddingModel,
+    embeddingModel: resolvedEmbeddingModel,
   };
 }
 

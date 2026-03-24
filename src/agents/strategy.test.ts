@@ -211,7 +211,7 @@ test('retrieveTaskReferences skips embeddings and uses lexical candidates when n
       },
       getSearchModeStatus: () => ({
         searchMode: 'lexical-only',
-        searchModeReason: 'EMBEDDING_* 未配置，已切换到 lexical-only 检索。',
+        searchModeReason: 'EMBEDDING_* 未完整配置，已切换到 lexical-only 检索。',
         embeddingModel: 'text-embedding-3-small',
       }),
     };

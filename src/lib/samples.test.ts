@@ -5,6 +5,7 @@ import { buildListSamplesQuery, buildRelatedSamplesQuery } from './samples';
 
 test('buildListSamplesQuery parameterizes all supported filters and pagination', () => {
   const built = buildListSamplesQuery({
+    view: 'trash',
     search: '复盘',
     track: '职场',
     contentType: '清单',
@@ -23,6 +24,7 @@ test('buildListSamplesQuery parameterizes all supported filters and pagination',
   assert.match(built.text, /\(s\.title ILIKE \$5 OR s\.body_text ILIKE \$5\)/);
   assert.match(built.text, /s\.created_at >= \$6::date/);
   assert.match(built.text, /s\.created_at < \(\$7::date \+ INTERVAL '1 day'\)/);
+  assert.match(built.text, /s\.deleted_at IS NOT NULL/);
   assert.match(built.text, /LIMIT \$8 OFFSET \$9/);
   assert.match(built.text, /COALESCE\(ref\.reference_count, 0\) AS reference_count/);
   assert.deepEqual(built.values, [
@@ -44,6 +46,7 @@ test('buildListSamplesQuery falls back to defaults when filters are omitted', ()
     limit: 20,
   });
 
+  assert.match(built.text, /s\.deleted_at IS NULL/);
   assert.doesNotMatch(built.text, /sa\.track =/);
   assert.doesNotMatch(built.text, /sa\.content_type =/);
   assert.doesNotMatch(built.text, /sva\.cover_style_tag =/);

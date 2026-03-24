@@ -184,6 +184,7 @@ export function buildSearchSimilarSamplesQuery({
   }
 
   const similarityExpr = 'LEAST(1, GREATEST(0, 1 - (se.embedding <=> $1::vector)))';
+  whereClauses.push('s.deleted_at IS NULL');
   whereClauses.push(`${similarityExpr} >= ${addParam(similarityThreshold)}`);
 
   const limitParam = addParam(limit);
@@ -255,6 +256,8 @@ export function buildSearchLexicalSamplesQuery({
   if (typeof filters.is_reference_allowed === 'boolean') {
     whereClauses.push(`s.is_reference_allowed = ${addParam(filters.is_reference_allowed)}`);
   }
+
+  whereClauses.push('s.deleted_at IS NULL');
 
   if (filters.track) {
     whereClauses.push(`sa.track = ${addParam(filters.track)}`);

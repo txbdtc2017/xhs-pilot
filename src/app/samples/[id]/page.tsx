@@ -1,8 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { SampleEditForm } from '@/components/sample-edit-form';
+import { SampleTrashActions } from '@/components/sample-trash-actions';
+import { SampleStatusAutoRefresh } from '@/components/sample-status-auto-refresh';
 import { StatusBadge } from '@/components/status-badge';
 import { buildHistoryTaskHref } from '@/app/create/history';
+import { isActiveSampleStatus } from '@/lib/sample-status';
 import { getSampleDetail } from '@/lib/samples';
 
 export const dynamic = 'force-dynamic';
@@ -28,17 +32,20 @@ function readStringArray(record: Record<string, unknown> | null, key: string): s
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
-export default async function SampleDetailPage({ params }: SampleDetailPageProps) {
-  const { id } = await params;
-  const detail = await getSampleDetail(id);
-
-  if (!detail) {
-    notFound();
-  }
-
+export function SampleDetailPageContent({
+  id,
+  detail,
+  statusRefreshControl,
+}: {
+  id: string;
+  detail: NonNullable<Awaited<ReturnType<typeof getSampleDetail>>>;
+  statusRefreshControl?: ReactNode;
+}) {
   const sample = detail.sample;
   const analysis = detail.analysis;
   const visual = detail.visualAnalysis;
+  const sampleStatus = readString(sample, 'status');
+  const isDeleted = Boolean(readString(sample, 'deleted_at'));
   const bodyText = readString(sample, 'body_text');
   const sourceUrl = readString(sample, 'source_url');
   const manualNotes = readString(sample, 'manual_notes');
@@ -53,19 +60,24 @@ export default async function SampleDetailPage({ params }: SampleDetailPageProps
 
   return (
     <div className="pageShell">
+      {statusRefreshControl === undefined ? (
+        <SampleStatusAutoRefresh isActive={isActiveSampleStatus(sampleStatus)} />
+      ) : statusRefreshControl}
       <header className="pageHeader">
-        <Link className="buttonGhost" href="/samples">
+        <Link className="buttonGhost" href={isDeleted ? '/samples?view=trash' : '/samples'}>
           返回样本库
         </Link>
         <p className="eyebrow">Sample Detail</p>
         <h1 className="pageTitle">{readString(sample, 'title')}</h1>
         <div className="inlineMeta">
-          <StatusBadge status={readString(sample, 'status')} />
+          <StatusBadge status={sampleStatus} />
+          {isDeleted ? <span className="badge badgeNeutral">已在回收站</span> : null}
           {readBoolean(sample, 'is_high_value') ? <span className="badge badgeWarning">高价值</span> : null}
           {!readBoolean(sample, 'is_reference_allowed') ? (
             <span className="badge badgeNeutral">禁止引用</span>
           ) : null}
         </div>
+        <SampleTrashActions context="detail" sampleId={id} view={isDeleted ? 'trash' : 'active'} />
       </header>
 
       <section className="contentColumns">
@@ -319,5 +331,22 @@ export default async function SampleDetailPage({ params }: SampleDetailPageProps
         />
       </section>
     </div>
+  );
+}
+
+export default async function SampleDetailPage({ params }: SampleDetailPageProps) {
+  const { id } = await params;
+  const detail = await getSampleDetail(id);
+
+  if (!detail) {
+    notFound();
+  }
+
+  return (
+    <SampleDetailPageContent
+      detail={detail}
+      id={id}
+      statusRefreshControl={<SampleStatusAutoRefresh isActive={isActiveSampleStatus(readString(detail.sample, 'status'))} />}
+    />
   );
 }

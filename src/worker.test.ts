@@ -5,7 +5,11 @@ import { processAnalyzeJob, type AnalyzeJobDependencies } from './worker-jobs';
 
 test('processAnalyzeJob continues to embedding when visual analysis fails', async () => {
   const originalEmbeddingApiKey = process.env.EMBEDDING_API_KEY;
+  const originalEmbeddingBaseUrl = process.env.EMBEDDING_BASE_URL;
+  const originalEmbeddingModel = process.env.EMBEDDING_MODEL;
   process.env.EMBEDDING_API_KEY = 'embed-key';
+  process.env.EMBEDDING_BASE_URL = 'https://api.openai.com/v1';
+  process.env.EMBEDDING_MODEL = 'text-embedding-3-small';
 
   const executedQueries: Array<{ text: string; params?: unknown[] }> = [];
   const queuedJobs: Array<{ name: string; data: unknown }> = [];
@@ -58,6 +62,8 @@ test('processAnalyzeJob continues to embedding when visual analysis fails', asyn
     await processAnalyzeJob({ data: { sampleId: 'sample-1' } }, dependencies);
   } finally {
     process.env.EMBEDDING_API_KEY = originalEmbeddingApiKey;
+    process.env.EMBEDDING_BASE_URL = originalEmbeddingBaseUrl;
+    process.env.EMBEDDING_MODEL = originalEmbeddingModel;
   }
 
   assert.equal(

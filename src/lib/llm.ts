@@ -1,5 +1,10 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
+import {
+  normalizeAnthropicBaseUrl,
+  resolveAnthropicCompatibleModelId,
+  resolveAnthropicProviderHeaders,
+} from './anthropic-provider-compat';
 import { resolveEnvValue } from './env';
 
 export const SUPPORTED_PROVIDER_PROTOCOLS = ['openai', 'anthropic-messages'] as const;
@@ -9,6 +14,7 @@ export interface ProviderOptions {
   protocol: ProviderProtocol;
   apiKey?: string;
   baseURL?: string;
+  headers?: Record<string, string>;
 }
 
 export interface EmbeddingProviderOptions {
@@ -42,26 +48,46 @@ function assertApiKey(apiKey: string | undefined, providerName: string): void {
   }
 }
 
+function applyAnthropicProviderCompatibility(options: ProviderOptions): ProviderOptions {
+  if (options.protocol !== 'anthropic-messages') {
+    return options;
+  }
+
+  const headers = {
+    ...resolveAnthropicProviderHeaders(options.baseURL),
+    ...options.headers,
+  };
+
+  return {
+    ...options,
+    baseURL: normalizeAnthropicBaseUrl(options.baseURL),
+    ...(Object.keys(headers).length > 0 ? { headers } : {}),
+  };
+}
+
 function createLanguageModelFactory(options: ProviderOptions, providerName: string) {
-  if (options.protocol === 'anthropic-messages') {
+  const compatibleOptions = applyAnthropicProviderCompatibility(options);
+
+  if (compatibleOptions.protocol === 'anthropic-messages') {
     const provider = createAnthropic({
-      apiKey: options.apiKey,
-      baseURL: options.baseURL,
+      apiKey: compatibleOptions.apiKey,
+      baseURL: compatibleOptions.baseURL,
+      headers: compatibleOptions.headers,
     });
 
     return (modelId: string) => {
-      assertApiKey(options.apiKey, providerName);
-      return provider(modelId);
+      assertApiKey(compatibleOptions.apiKey, providerName);
+      return provider(resolveAnthropicCompatibleModelId(modelId, compatibleOptions.baseURL));
     };
   }
 
   const provider = createOpenAI({
-    apiKey: options.apiKey,
-    baseURL: options.baseURL,
+    apiKey: compatibleOptions.apiKey,
+    baseURL: compatibleOptions.baseURL,
   });
 
   return (modelId: string) => {
-    assertApiKey(options.apiKey, providerName);
+    assertApiKey(compatibleOptions.apiKey, providerName);
     return provider(modelId);
   };
 }
@@ -85,19 +111,19 @@ export function resolveProviderOptions(
 ): ResolvedProviderOptions {
   const llmProtocol = resolveProviderProtocol(env.LLM_PROTOCOL, 'openai', 'LLM_PROTOCOL');
 
-  const llm: ProviderOptions = {
+  const llm = applyAnthropicProviderCompatibility({
     protocol: llmProtocol,
     apiKey: resolveEnvValue(env.LLM_API_KEY),
     baseURL: resolveEnvValue(env.LLM_BASE_URL),
-  };
+  });
 
   return {
     llm,
-    vision: {
+    vision: applyAnthropicProviderCompatibility({
       protocol: resolveProviderProtocol(env.VISION_PROTOCOL, llmProtocol, 'VISION_PROTOCOL'),
       apiKey: resolveEnvValue(env.VISION_API_KEY, llm.apiKey),
       baseURL: resolveEnvValue(env.VISION_BASE_URL, llm.baseURL),
-    },
+    }),
     embedding: {
       apiKey: resolveEnvValue(env.EMBEDDING_API_KEY),
       baseURL: resolveEnvValue(env.EMBEDDING_BASE_URL),

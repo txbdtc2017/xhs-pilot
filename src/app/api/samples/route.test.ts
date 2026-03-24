@@ -1,8 +1,39 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createSamplesPostHandler } from './route';
+import * as samplesRoute from './route';
 import { InvalidManualTagsError, parseManualTagsFromFormData } from './manual-tags';
+
+const { createSamplesPostHandler } = samplesRoute;
+
+test('GET /api/samples forwards the selected view to listSamples', async () => {
+  assert.equal(typeof samplesRoute.createSamplesGetHandler, 'function');
+
+  let receivedFilters: Record<string, unknown> | null = null;
+  const GET = samplesRoute.createSamplesGetHandler({
+    listSamples: async (filters: Record<string, unknown>) => {
+      receivedFilters = filters;
+      return { samples: [], total: 0 };
+    },
+  });
+
+  const response = await GET(new Request('http://localhost/api/samples?view=trash&page=2&limit=10&search=复盘'));
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { samples: [], total: 0 });
+  assert.deepEqual(receivedFilters, {
+    view: 'trash',
+    search: '复盘',
+    track: undefined,
+    contentType: undefined,
+    coverStyle: undefined,
+    isHighValue: undefined,
+    dateFrom: undefined,
+    dateTo: undefined,
+    page: 2,
+    limit: 10,
+  });
+});
 
 test('parseManualTagsFromFormData prefers manual_tags[] and normalizes values', () => {
   const formData = new FormData();

@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { storage } from '@/lib/storage';
-import { deleteSample, getSampleDetail, updateSample } from '@/lib/samples';
+import {
+  getSampleDetail,
+  permanentlyDeleteSample,
+  restoreSample,
+  softDeleteSample,
+  updateSample,
+} from '@/lib/samples';
 
 export interface SampleDetailDependencies {
   getSampleDetail: typeof getSampleDetail;
@@ -12,7 +18,15 @@ export interface SamplePatchDependencies {
 }
 
 export interface SampleDeleteDependencies {
-  deleteSample: typeof deleteSample;
+  softDeleteSample: typeof softDeleteSample;
+}
+
+export interface SampleRestoreDependencies {
+  restoreSample: typeof restoreSample;
+}
+
+export interface SamplePermanentDeleteDependencies {
+  permanentlyDeleteSample: typeof permanentlyDeleteSample;
   deleteStorageObject: (storageKey: string) => Promise<void>;
 }
 
@@ -30,7 +44,19 @@ function createDefaultSamplePatchDependencies(): SamplePatchDependencies {
 
 function createDefaultSampleDeleteDependencies(): SampleDeleteDependencies {
   return {
-    deleteSample,
+    softDeleteSample,
+  };
+}
+
+function createDefaultSampleRestoreDependencies(): SampleRestoreDependencies {
+  return {
+    restoreSample,
+  };
+}
+
+function createDefaultSamplePermanentDeleteDependencies(): SamplePermanentDeleteDependencies {
+  return {
+    permanentlyDeleteSample,
     deleteStorageObject: (storageKey) => storage.delete(storageKey),
   };
 }
@@ -107,9 +133,71 @@ export function createSampleDeleteHandler(
   ) {
     try {
       const { id } = await params;
-      const images = await dependencies.deleteSample(id);
+      const result = await dependencies.softDeleteSample(id);
 
-      for (const image of images) {
+      if ('error' in result) {
+        if (result.error === 'not_found') {
+          return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        }
+
+        return NextResponse.json({ error: 'Sample is already in trash' }, { status: 409 });
+      }
+
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      logger.error({ error }, 'Failed to delete sample');
+      return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+  };
+}
+
+export function createSampleRestoreHandler(
+  dependencies: SampleRestoreDependencies = createDefaultSampleRestoreDependencies(),
+) {
+  return async function POST(
+    _request: Request,
+    { params }: { params: Promise<{ id: string }> },
+  ) {
+    try {
+      const { id } = await params;
+      const result = await dependencies.restoreSample(id);
+
+      if ('error' in result) {
+        if (result.error === 'not_found') {
+          return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        }
+
+        return NextResponse.json({ error: 'Sample is not in trash' }, { status: 409 });
+      }
+
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      logger.error({ error }, 'Failed to restore sample');
+      return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+  };
+}
+
+export function createSamplePermanentDeleteHandler(
+  dependencies: SamplePermanentDeleteDependencies = createDefaultSamplePermanentDeleteDependencies(),
+) {
+  return async function DELETE(
+    _request: Request,
+    { params }: { params: Promise<{ id: string }> },
+  ) {
+    try {
+      const { id } = await params;
+      const result = await dependencies.permanentlyDeleteSample(id);
+
+      if ('error' in result) {
+        if (result.error === 'not_found') {
+          return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        }
+
+        return NextResponse.json({ error: 'Sample must be in trash before permanent deletion' }, { status: 409 });
+      }
+
+      for (const image of result.images) {
         if (image.storage_key) {
           await dependencies.deleteStorageObject(image.storage_key);
         }
@@ -117,7 +205,7 @@ export function createSampleDeleteHandler(
 
       return NextResponse.json({ success: true });
     } catch (error) {
-      logger.error({ error }, 'Failed to delete sample');
+      logger.error({ error }, 'Failed to permanently delete sample');
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
   };

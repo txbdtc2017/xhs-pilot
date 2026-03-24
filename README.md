@@ -126,7 +126,7 @@ VISION_PROTOCOL=${LLM_PROTOCOL}
 VISION_API_KEY=${LLM_API_KEY}
 VISION_BASE_URL=${LLM_BASE_URL}
 
-# 可选：留空时进入 lexical-only 检索模式
+# 可选：任意关键项缺失时都会回退到 lexical-only 检索模式
 EMBEDDING_BASE_URL=
 EMBEDDING_API_KEY=
 EMBEDDING_MODEL=text-embedding-3-small
@@ -135,6 +135,11 @@ EMBEDDING_DIMENSIONS=1536
 STORAGE_PROVIDER=local
 MAX_UPLOAD_SIZE_MB=10
 ```
+
+说明：
+
+- `anthropic-messages` 模式下，`LLM_BASE_URL` 与 `VISION_BASE_URL` 支持“带 `/v1`”和“不带 `/v1`”两种写法，运行时会统一规范化为可用的 `/v1` endpoint
+- 这轮 Kimi Coding 兼容仅覆盖 `anthropic-messages` 的 base URL、默认 header 与模型别名；`EMBEDDING_*` 仍保持独立的 OpenAI-compatible 语义
 
 ### 环境变量分类
 
@@ -147,9 +152,8 @@ MAX_UPLOAD_SIZE_MB=10
 
 ### 检索运行模式
 
-- `hybrid`：已显式配置可用的 `EMBEDDING_*`，使用结构化过滤 + 向量排序
-- `lexical-only`：未配置 `EMBEDDING_*`，使用结构化过滤 + 轻量关键词检索
-- `misconfigured`：你填了部分 `EMBEDDING_*` 但配置不完整或不可用，系统会显式报错，不静默降级
+- `hybrid`：`EMBEDDING_API_KEY`、`EMBEDDING_BASE_URL`、`EMBEDDING_MODEL` 都已配置，使用结构化过滤 + 向量排序
+- `lexical-only`：任意一个 `EMBEDDING_*` 关键项缺失，使用结构化过滤 + 轻量关键词检索
 
 如果你在 `lexical-only` 模式下录入了样本，后续补齐 embedding 配置后可以手动回填：
 
@@ -159,19 +163,19 @@ npm run embeddings:backfill
 
 ### Kimi Coding（Anthropic Messages）
 
-如果你的 Kimi coding 套餐提供 Anthropic-compatible endpoint，推荐把文本分析、策略和正文生成切到 `anthropic-messages`。图片分析可以继续复用 `VISION_*`，embedding 若需要启用，则单独配置独立 provider：
+如果你希望按 OpenClaw / Claude Code 风格来配置 Kimi Coding，可以直接把 Kimi 的 provider 根地址填进 `anthropic-messages`。当前仓库内部仍使用 Vercel AI SDK，但会在运行时自动补齐 `/v1` 并加上 Kimi 所需的兼容 header。embedding 若需要启用，仍需单独配置独立 provider：
 
 ```bash
 LLM_PROTOCOL=anthropic-messages
-LLM_BASE_URL=https://your-kimi-anthropic-endpoint
+LLM_BASE_URL=https://api.kimi.com/coding/
 LLM_API_KEY=sk-kimi
-LLM_MODEL_ANALYSIS=kimi-k2-0905-preview
-LLM_MODEL_GENERATION=kimi-k2-0905-preview
+LLM_MODEL_ANALYSIS=kimi-code
+LLM_MODEL_GENERATION=kimi-code
+LLM_MODEL_VISION=kimi-code
 
-VISION_PROTOCOL=openai
-VISION_BASE_URL=https://api.openai.com/v1
-VISION_API_KEY=sk-vision
-LLM_MODEL_VISION=gpt-4o
+VISION_PROTOCOL=${LLM_PROTOCOL}
+VISION_BASE_URL=${LLM_BASE_URL}
+VISION_API_KEY=${LLM_API_KEY}
 
 EMBEDDING_BASE_URL=https://api.openai.com/v1
 EMBEDDING_API_KEY=sk-embedding
@@ -180,11 +184,12 @@ EMBEDDING_MODEL=text-embedding-3-small
 
 说明：
 
-- 这里的 `https://your-kimi-anthropic-endpoint` 指向 Moonshot 开放平台给你的 Anthropic-compatible endpoint
-- 当前项目不会把 `embedding` 自动切到 `anthropic-messages`
-- 未配置 `EMBEDDING_*` 时，系统会进入 `lexical-only` 检索模式，录入和生成仍可用
-- 如果你填了部分 `EMBEDDING_*` 但配置不完整，系统会标记为 `misconfigured` 并显式报错，而不是静默降级
-- 如果你的视觉模型也走 Anthropic-compatible endpoint，可以把 `VISION_PROTOCOL` 同步改成 `anthropic-messages`
+- `https://api.kimi.com/coding/` 和 `https://api.kimi.com/coding/v1` 都可用；运行时会统一按 Anthropic Messages 所需的 `/v1/messages` 语义处理
+- 命中 `api.kimi.com/coding` 时，系统会自动注入 `User-Agent: claude-code/0.1.0` 作为兼容行为
+- `kimi-code` 是推荐模型别名，运行时会兼容到上游 `kimi-for-coding`；`k2p5` 仍作为 legacy 值可用
+- 当前项目不会把 `embedding` 自动切到 `anthropic-messages`；本轮也不涉及 `EMBEDDING_*` 语义调整
+- 任意一个 `EMBEDDING_*` 关键项缺失时，系统都会回退到 `lexical-only` 检索模式，录入和生成仍可用
+- 如果你的视觉模型不走 Kimi Anthropic endpoint，仍可以单独覆盖 `VISION_*` 到其他 provider
 
 ### OpenAI
 

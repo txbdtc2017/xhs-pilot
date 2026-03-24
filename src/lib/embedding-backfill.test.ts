@@ -9,7 +9,7 @@ test('backfillMissingEmbeddings rejects non-hybrid search modes', async () => {
       enqueueEmbeddingJob: async () => undefined,
       getSearchModeStatus: () => ({
         searchMode: 'lexical-only',
-        searchModeReason: 'EMBEDDING_* 未配置，已切换到 lexical-only 检索。',
+        searchModeReason: 'EMBEDDING_* 未完整配置，已切换到 lexical-only 检索。',
         embeddingModel: 'text-embedding-3-small',
       }),
     }),

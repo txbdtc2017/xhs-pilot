@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { processIngestionText, processIngestionImages, IngestionImage } from '@/agents/ingestion';
-import { listSamples } from '@/lib/samples';
+import { listSamples, normalizeSampleListView } from '@/lib/samples';
 import { InvalidManualTagsError, parseManualTagsFromFormData } from './manual-tags';
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -89,6 +89,16 @@ export interface SamplesPostDependencies {
   addAnalyzeJob: (sampleId: string) => Promise<void>;
 }
 
+export interface SamplesGetDependencies {
+  listSamples: typeof listSamples;
+}
+
+function createDefaultSamplesGetDependencies(): SamplesGetDependencies {
+  return {
+    listSamples,
+  };
+}
+
 function createDefaultSamplesPostDependencies(): SamplesPostDependencies {
   return {
     getMaxUploadSizeBytes,
@@ -105,35 +115,40 @@ function createDefaultSamplesPostDependencies(): SamplesPostDependencies {
   };
 }
 
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
-    const limit = Math.max(parseInt(searchParams.get('limit') || '20', 10), 1);
-    const isHighValueParam = searchParams.get('is_high_value');
+export function createSamplesGetHandler(
+  dependencies: SamplesGetDependencies = createDefaultSamplesGetDependencies(),
+) {
+  return async function GET(request: Request) {
+    try {
+      const { searchParams } = new URL(request.url);
+      const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
+      const limit = Math.max(parseInt(searchParams.get('limit') || '20', 10), 1);
+      const isHighValueParam = searchParams.get('is_high_value');
 
-    return NextResponse.json(
-      await listSamples({
-        search: searchParams.get('search') || undefined,
-        track: searchParams.get('track') || undefined,
-        contentType: searchParams.get('content_type') || undefined,
-        coverStyle: searchParams.get('cover_style') || undefined,
-        isHighValue:
-          isHighValueParam === 'true'
-            ? true
-            : isHighValueParam === 'false'
-              ? false
-              : undefined,
-        dateFrom: searchParams.get('date_from') || undefined,
-        dateTo: searchParams.get('date_to') || undefined,
-        page,
-        limit,
-      }),
-    );
-  } catch (error) {
-    logger.error({ error }, 'Failed to fetch samples');
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
+      return NextResponse.json(
+        await dependencies.listSamples({
+          view: normalizeSampleListView(searchParams.get('view')),
+          search: searchParams.get('search') || undefined,
+          track: searchParams.get('track') || undefined,
+          contentType: searchParams.get('content_type') || undefined,
+          coverStyle: searchParams.get('cover_style') || undefined,
+          isHighValue:
+            isHighValueParam === 'true'
+              ? true
+              : isHighValueParam === 'false'
+                ? false
+                : undefined,
+          dateFrom: searchParams.get('date_from') || undefined,
+          dateTo: searchParams.get('date_to') || undefined,
+          page,
+          limit,
+        }),
+      );
+    } catch (error) {
+      logger.error({ error }, 'Failed to fetch samples');
+      return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+  };
 }
 
 export function createSamplesPostHandler(
@@ -218,4 +233,5 @@ export function createSamplesPostHandler(
   };
 }
 
+export const GET = createSamplesGetHandler();
 export const POST = createSamplesPostHandler();

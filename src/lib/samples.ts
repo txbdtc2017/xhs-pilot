@@ -1,6 +1,9 @@
 import { query, queryOne, type ParameterizedQuery } from './db';
 
+export type SampleListView = 'active' | 'trash';
+
 export interface SampleListFilters {
+  view?: SampleListView;
   search?: string;
   track?: string;
   contentType?: string;
@@ -83,14 +86,33 @@ interface StorageKeyRow {
   storage_key: string | null;
 }
 
+export type SampleMutationResult =
+  | { success: true }
+  | { error: 'not_found' | 'already_deleted' | 'not_deleted' };
+
+export type SamplePermanentDeleteResult =
+  | { success: true; images: StorageKeyRow[] }
+  | { error: 'not_found' | 'not_deleted' };
+
+interface SampleDeletionStateRow {
+  deleted_at: string | null;
+}
+
+export function normalizeSampleListView(rawValue: string | null | undefined): SampleListView {
+  return rawValue === 'trash' ? 'trash' : 'active';
+}
+
 function buildSampleListWhereClause(filters: Omit<SampleListFilters, 'page' | 'limit'>) {
   const whereClauses: string[] = [];
   const values: unknown[] = [];
+  const view = normalizeSampleListView(filters.view);
 
   const addParam = (value: unknown): string => {
     values.push(value);
     return `$${values.length}`;
   };
+
+  whereClauses.push(view === 'trash' ? 's.deleted_at IS NOT NULL' : 's.deleted_at IS NULL');
 
   if (filters.track) {
     whereClauses.push(`sa.track = ${addParam(filters.track)}`);
@@ -213,6 +235,7 @@ export function buildRelatedSamplesQuery({
       INNER JOIN sample_embeddings candidate ON candidate.sample_id <> $1
       INNER JOIN samples s ON s.id = candidate.sample_id
       LEFT JOIN sample_analysis sa ON sa.sample_id = s.id
+      WHERE s.deleted_at IS NULL
       ORDER BY similarity DESC
       LIMIT $2
     `,
@@ -238,29 +261,36 @@ export async function listSamples(filters: SampleListFilters): Promise<{
   };
 }
 
-export async function getSampleFilterOptions(): Promise<SampleFilterOptions> {
+export async function getSampleFilterOptions(
+  view: SampleListView = 'active',
+): Promise<SampleFilterOptions> {
+  const deletedWhereClause = view === 'trash' ? 's.deleted_at IS NOT NULL' : 's.deleted_at IS NULL';
+
   const [tracks, contentTypes, coverStyles] = await Promise.all([
     query<{ value: string }>(
       `
         SELECT DISTINCT track AS value
-        FROM sample_analysis
-        WHERE track IS NOT NULL AND track <> ''
+        FROM sample_analysis sa
+        INNER JOIN samples s ON s.id = sa.sample_id
+        WHERE ${deletedWhereClause} AND track IS NOT NULL AND track <> ''
         ORDER BY track ASC
       `,
     ),
     query<{ value: string }>(
       `
         SELECT DISTINCT content_type AS value
-        FROM sample_analysis
-        WHERE content_type IS NOT NULL AND content_type <> ''
+        FROM sample_analysis sa
+        INNER JOIN samples s ON s.id = sa.sample_id
+        WHERE ${deletedWhereClause} AND content_type IS NOT NULL AND content_type <> ''
         ORDER BY content_type ASC
       `,
     ),
     query<{ value: string }>(
       `
         SELECT DISTINCT cover_style_tag AS value
-        FROM sample_visual_analysis
-        WHERE cover_style_tag IS NOT NULL AND cover_style_tag <> ''
+        FROM sample_visual_analysis sva
+        INNER JOIN samples s ON s.id = sva.sample_id
+        WHERE ${deletedWhereClause} AND cover_style_tag IS NOT NULL AND cover_style_tag <> ''
         ORDER BY cover_style_tag ASC
       `,
     ),
@@ -278,6 +308,7 @@ export async function listSampleSelectOptions(limit = 50): Promise<SampleSelectO
     `
       SELECT id, title, status
       FROM samples
+      WHERE deleted_at IS NULL
       ORDER BY created_at DESC
       LIMIT $1
     `,
@@ -399,6 +430,59 @@ export async function updateSample(
   );
 }
 
+async function getSampleDeletionState(sampleId: string): Promise<SampleDeletionStateRow | null> {
+  return queryOne<SampleDeletionStateRow>(
+    `SELECT deleted_at FROM samples WHERE id = $1`,
+    [sampleId],
+  );
+}
+
+export async function softDeleteSample(sampleId: string): Promise<SampleMutationResult> {
+  const state = await getSampleDeletionState(sampleId);
+
+  if (!state) {
+    return { error: 'not_found' };
+  }
+
+  if (state.deleted_at) {
+    return { error: 'already_deleted' };
+  }
+
+  await query(
+    `
+      UPDATE samples
+      SET deleted_at = NOW(), updated_at = NOW()
+      WHERE id = $1
+    `,
+    [sampleId],
+  );
+
+  return { success: true };
+}
+
+export async function restoreSample(sampleId: string): Promise<SampleMutationResult> {
+  const state = await getSampleDeletionState(sampleId);
+
+  if (!state) {
+    return { error: 'not_found' };
+  }
+
+  if (!state.deleted_at) {
+    return { error: 'not_deleted' };
+  }
+
+  await query(
+    `
+      UPDATE samples
+      SET deleted_at = NULL, updated_at = NOW()
+      WHERE id = $1
+    `,
+    [sampleId],
+  );
+
+  return { success: true };
+}
+
 export async function deleteSample(sampleId: string): Promise<StorageKeyRow[]> {
   const images = await query<StorageKeyRow>(
     `
@@ -411,4 +495,23 @@ export async function deleteSample(sampleId: string): Promise<StorageKeyRow[]> {
 
   await query(`DELETE FROM samples WHERE id = $1`, [sampleId]);
   return images;
+}
+
+export async function permanentlyDeleteSample(
+  sampleId: string,
+): Promise<SamplePermanentDeleteResult> {
+  const state = await getSampleDeletionState(sampleId);
+
+  if (!state) {
+    return { error: 'not_found' };
+  }
+
+  if (!state.deleted_at) {
+    return { error: 'not_deleted' };
+  }
+
+  return {
+    success: true,
+    images: await deleteSample(sampleId),
+  };
 }

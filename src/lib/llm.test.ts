@@ -99,6 +99,34 @@ test('resolveProviderOptions lets vision override the shared protocol while keep
   });
 });
 
+test('resolveProviderOptions normalizes anthropic-messages base URLs and injects Kimi defaults', () => {
+  const resolved = resolveProviderOptions({
+    LLM_PROTOCOL: 'anthropic-messages',
+    LLM_API_KEY: 'main-key',
+    LLM_BASE_URL: 'https://api.kimi.com/coding/',
+    VISION_PROTOCOL: 'anthropic-messages',
+    VISION_BASE_URL: 'https://api.kimi.com/coding',
+  });
+
+  assert.deepEqual(resolved.llm, {
+    protocol: 'anthropic-messages',
+    apiKey: 'main-key',
+    baseURL: 'https://api.kimi.com/coding/v1',
+    headers: {
+      'User-Agent': 'claude-code/0.1.0',
+    },
+  });
+
+  assert.deepEqual(resolved.vision, {
+    protocol: 'anthropic-messages',
+    apiKey: 'main-key',
+    baseURL: 'https://api.kimi.com/coding/v1',
+    headers: {
+      'User-Agent': 'claude-code/0.1.0',
+    },
+  });
+});
+
 test('resolveProviderOptions rejects unsupported protocol values', () => {
   assert.throws(
     () => resolveProviderOptions({
@@ -128,6 +156,50 @@ test('createProviderFactories keeps embedding on the openai-compatible provider 
   assert.equal(analysisModel.provider, 'anthropic.messages');
   assert.equal(visionModel.provider, 'anthropic.messages');
   assert.equal(embeddingModel.provider, 'openai.embedding');
+});
+
+test('createProviderFactories normalizes Kimi anthropic settings and remaps the kimi-code alias', () => {
+  const providers = createProviderFactories({
+    LLM_PROTOCOL: 'anthropic-messages',
+    LLM_API_KEY: 'anthropic-key',
+    LLM_BASE_URL: 'https://api.kimi.com/coding/',
+    VISION_PROTOCOL: 'anthropic-messages',
+    VISION_API_KEY: 'vision-key',
+    VISION_BASE_URL: 'https://api.kimi.com/coding/v1',
+  });
+
+  const analysisModel = providers.llmAnalysis('kimi-code') as {
+    modelId: string;
+    config: { baseURL: string; headers: () => Record<string, string> };
+  };
+  const visionModel = providers.llmVision('k2p5') as {
+    modelId: string;
+    config: { baseURL: string; headers: () => Record<string, string> };
+  };
+
+  assert.equal(analysisModel.modelId, 'kimi-for-coding');
+  assert.equal(visionModel.modelId, 'k2p5');
+  assert.equal(analysisModel.config.baseURL, 'https://api.kimi.com/coding/v1');
+  assert.equal(visionModel.config.baseURL, 'https://api.kimi.com/coding/v1');
+  assert.match(analysisModel.config.headers()['user-agent'] ?? '', /claude-code\/0\.1\.0/);
+  assert.match(visionModel.config.headers()['user-agent'] ?? '', /claude-code\/0\.1\.0/);
+});
+
+test('createProviderFactories does not inject Kimi headers for non-Kimi anthropic providers', () => {
+  const providers = createProviderFactories({
+    LLM_PROTOCOL: 'anthropic-messages',
+    LLM_API_KEY: 'anthropic-key',
+    LLM_BASE_URL: 'https://api.anthropic.com',
+  });
+
+  const analysisModel = providers.llmAnalysis('claude-sonnet-4-20250514') as {
+    modelId: string;
+    config: { baseURL: string; headers: () => Record<string, string> };
+  };
+
+  assert.equal(analysisModel.modelId, 'claude-sonnet-4-20250514');
+  assert.equal(analysisModel.config.baseURL, 'https://api.anthropic.com/v1');
+  assert.doesNotMatch(analysisModel.config.headers()['user-agent'] ?? '', /claude-code\/0\.1\.0/);
 });
 
 test('createProviderFactories preserves the existing openai-compatible path for analysis, generation, vision, and embedding', () => {

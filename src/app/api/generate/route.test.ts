@@ -231,7 +231,7 @@ test('POST /api/generate emits zero-shot references when retrieval falls back', 
     understandTask: async () => createTaskUnderstanding(),
     retrieveTaskReferencesFromUnderstanding: async () => ({
       searchMode: 'lexical-only' as const,
-      searchModeReason: 'EMBEDDING_* 未配置，已切换到 lexical-only 检索。',
+      searchModeReason: 'EMBEDDING_* 未完整配置，已切换到 lexical-only 检索。',
       referenceMode: 'zero-shot' as const,
       similarSamples: [],
       taskUnderstanding: createTaskUnderstanding(),
@@ -257,7 +257,7 @@ test('POST /api/generate emits zero-shot references when retrieval falls back', 
 
   assert.deepEqual(referencesEvent?.data, {
     search_mode: 'lexical-only',
-    search_mode_reason: 'EMBEDDING_* 未配置，已切换到 lexical-only 检索。',
+    search_mode_reason: 'EMBEDDING_* 未完整配置，已切换到 lexical-only 检索。',
     reference_mode: 'zero-shot',
     candidate_count: 0,
     selected_references: [],
