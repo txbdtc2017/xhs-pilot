@@ -53,7 +53,8 @@ test('samples page content shows ingest entry and trash action for active sample
 
   assert.match(html, /录入样本/);
   assert.match(html, /移入回收站/);
-  assert.match(html, /样本库/);
+  assert.match(html, /内容档案库/);
+  assert.match(html, /把样本沉淀成可检索、可归类、可再创作的内容档案/);
 });
 
 test('samples page content hides ingest entry and shows restore actions in trash view', () => {

@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -65,10 +66,13 @@ export function SampleDetailPageContent({
       ) : statusRefreshControl}
       <header className="pageHeader">
         <Link className="buttonGhost" href={isDeleted ? '/samples?view=trash' : '/samples'}>
-          返回样本库
+          返回内容档案
         </Link>
-        <p className="eyebrow">Sample Detail</p>
+        <p className="eyebrow">样本档案</p>
         <h1 className="pageTitle">{readString(sample, 'title')}</h1>
+        <p className="pageSubtitle">
+          样本档案会把原文、解析、认知、关系和人工修正收在同一页，方便你判断它该如何沉淀、归类和复用。
+        </p>
         <div className="inlineMeta">
           <StatusBadge status={sampleStatus} />
           {isDeleted ? <span className="badge badgeNeutral">已在回收站</span> : null}
@@ -84,7 +88,7 @@ export function SampleDetailPageContent({
         <article className="sectionCard">
           <div className="panelHeading">
             <div>
-              <p className="eyebrow">A. Original Content</p>
+              <p className="eyebrow">A. Source Material</p>
               <h2 className="panelTitle">原始内容</h2>
             </div>
           </div>
@@ -104,7 +108,13 @@ export function SampleDetailPageContent({
               {detail.images.length > 0 ? (
                 detail.images.map((image) => (
                   <figure className="imageFrame" key={String(image.id)}>
-                    <img alt={readString(sample, 'title')} src={readString(image, 'image_url')} />
+                    <Image
+                      alt={readString(sample, 'title')}
+                      height={720}
+                      src={readString(image, 'image_url')}
+                      unoptimized
+                      width={960}
+                    />
                     <figcaption className="mutedText">
                       {readString(image, 'image_type') || 'image'}
                     </figcaption>
@@ -179,7 +189,7 @@ export function SampleDetailPageContent({
         <article className="sectionCard">
           <div className="panelHeading">
             <div>
-              <p className="eyebrow">C. Cognitive Analysis</p>
+              <p className="eyebrow">C. Cognitive Notes</p>
               <h2 className="panelTitle">认知结果</h2>
             </div>
           </div>
@@ -238,7 +248,7 @@ export function SampleDetailPageContent({
         <article className="sectionCard">
           <div className="panelHeading">
             <div>
-              <p className="eyebrow">D. Relationship Network</p>
+              <p className="eyebrow">D. Relationship Map</p>
               <h2 className="panelTitle">关系网络</h2>
             </div>
           </div>

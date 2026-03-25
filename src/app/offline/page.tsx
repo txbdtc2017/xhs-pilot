@@ -7,19 +7,18 @@ export default function OfflinePage() {
         <p className="eyebrow">Offline</p>
         <h1 className="pageTitle">你当前处于离线状态</h1>
         <p className="pageSubtitle">
-          XHS Pilot 当前只提供可安装、可缓存静态壳、离线时有友好提示。
-          创作生成、样本分析、检索和历史详情仍然需要服务端与模型服务在线。
+          离线时仍可查看已缓存的工作台外壳，但创作生成、样本分析、检索与历史详情仍然依赖服务端和模型服务在线。
         </p>
       </header>
 
       <section className="sectionCard">
         <div className="stackMd">
           <p>
-            你可以在网络恢复后继续使用样本库、创作工作台和生成历史链路。
+            网络恢复后，你可以继续回到内容档案、创作工作台和历史链路，把中断的工作接回主流程。
           </p>
           <div className="inlineActions">
             <Link className="buttonSecondary" href="/">
-              返回 Dashboard
+              返回资产总览
             </Link>
             <Link className="buttonGhost" href="/create">
               去创作工作台

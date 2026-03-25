@@ -9,5 +9,6 @@ test('offline page explains the limited offline experience', () => {
   const html = renderToStaticMarkup(createElement(OfflinePage));
 
   assert.match(html, /你当前处于离线状态/);
-  assert.match(html, /可安装、可缓存静态壳、离线时有友好提示/);
+  assert.match(html, /离线时仍可查看已缓存的工作台外壳/);
+  assert.match(html, /返回资产总览/);
 });

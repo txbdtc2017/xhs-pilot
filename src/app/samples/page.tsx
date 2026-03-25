@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { SampleIngestDrawer } from '@/components/sample-ingest-drawer';
@@ -100,14 +101,16 @@ export function SamplesPageContent({
         <SampleStatusAutoRefresh isActive={!isTrashView && hasActiveSamples} />
       ) : statusRefreshControl}
       <header className="pageHeader">
-        <p className="eyebrow">Samples</p>
+        <p className="eyebrow">内容档案库</p>
         <h1 className="pageTitle">
-          {isTrashView ? '回收站里的样本可恢复，也可彻底清理。' : '把样本真正喂进系统，再把结果看明白。'}
+          {isTrashView
+            ? '回收站里的样本仍是你的资产，只是暂时退出主档案。'
+            : '把样本沉淀成可检索、可归类、可再创作的内容档案。'}
         </h1>
         <p className="pageSubtitle">
           {isTrashView
-            ? '这里仅显示已移入回收站的样本。恢复后会回到正常列表；彻底删除会清理样本记录与关联图片。'
-            : '样本库页同时承担录入、筛选、管理三件事。新样本进入后会自动走分析队列，并在这里持续呈现状态与引用价值。'}
+            ? '这里仅显示已移入回收站的样本。恢复后会回到主档案；彻底删除会同步清理记录与关联图片。'
+            : '先通过筛选把样本缩到合适范围，再根据状态、标签和被引用价值决定哪些内容值得继续沉淀。'}
         </p>
       </header>
 
@@ -215,14 +218,20 @@ export function SamplesPageContent({
         </div>
       </section>
 
-      <section className="sampleCardGrid">
+      <section className="sampleCardGrid sampleLibraryGrid">
         {result.samples.length > 0 ? (
           result.samples.map((sample) => (
             <article className="sampleCard" key={sample.id}>
               <Link className="sampleCardLink" href={`/samples/${sample.id}`}>
                 <div className="mediaThumb">
                   {sample.cover_url ? (
-                    <img alt={sample.title} src={sample.cover_url} />
+                    <Image
+                      alt={sample.title}
+                      height={720}
+                      src={sample.cover_url}
+                      unoptimized
+                      width={960}
+                    />
                   ) : (
                     <div className="mediaThumbPlaceholder">No Cover</div>
                   )}

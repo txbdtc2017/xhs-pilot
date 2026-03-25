@@ -136,7 +136,7 @@ export function StyleProfileEditor({
         <div className="panelHeading">
           <div>
             <p className="eyebrow">Profile Settings</p>
-            <h2 className="panelTitle">画像信息</h2>
+            <h2 className="panelTitle">风格档案信息</h2>
           </div>
         </div>
 
@@ -163,7 +163,7 @@ export function StyleProfileEditor({
         <div className="panelHeading">
           <div>
             <p className="eyebrow">Curation</p>
-            <h2 className="panelTitle">添加样本到画像</h2>
+            <h2 className="panelTitle">把样本纳入当前集合</h2>
           </div>
         </div>
 

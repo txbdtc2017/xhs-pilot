@@ -20,9 +20,11 @@ body {
   line-height: var(--line-height-base);
   color: var(--color-text-primary);
   background:
-    radial-gradient(circle at top left, rgba(217, 73, 99, 0.18), transparent 32%),
-    radial-gradient(circle at top right, rgba(64, 111, 163, 0.12), transparent 24%),
+    radial-gradient(circle at top left, rgba(180, 35, 53, 0.08), transparent 28%),
+    radial-gradient(circle at top right, rgba(68, 107, 138, 0.08), transparent 24%),
+    linear-gradient(90deg, rgba(126, 98, 68, 0.03) 1px, transparent 1px),
     linear-gradient(180deg, var(--color-background-accent), var(--color-background));
+  background-size: auto, auto, 32px 32px, auto;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -66,7 +68,7 @@ select {
   width: 100%;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 252, 247, 0.92);
   color: var(--color-text-primary);
   padding: 0.85rem 0.95rem;
   transition: border-color var(--transition-base), box-shadow var(--transition-base),
@@ -78,8 +80,8 @@ textarea:focus,
 select:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 4px rgba(217, 73, 99, 0.12);
-  background: white;
+  box-shadow: 0 0 0 4px rgba(180, 35, 53, 0.1);
+  background: var(--color-surface-strong);
 }
 
 textarea {
@@ -90,11 +92,12 @@ textarea {
   min-height: 100vh;
   display: grid;
   grid-template-columns: var(--layout-nav-width) minmax(0, 1fr);
+  align-items: start;
 }
 
 .appContent {
   min-width: 0;
-  padding: var(--spacing-xl);
+  padding: 40px 40px 56px;
 }
 
 .app-nav {
@@ -104,11 +107,13 @@ textarea {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xl);
-  padding: var(--spacing-xl);
+  gap: 28px;
+  padding: 32px 28px;
   border-right: 1px solid var(--color-border);
-  background: rgba(255, 252, 248, 0.72);
-  backdrop-filter: blur(18px);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 248, 0.94), rgba(248, 242, 234, 0.98)),
+    linear-gradient(90deg, rgba(126, 98, 68, 0.04) 1px, transparent 1px);
+  background-size: auto, 28px 28px;
 }
 
 .app-navHeader {
@@ -126,32 +131,35 @@ textarea {
 .brand strong {
   display: block;
   font-family: var(--font-family-display);
-  font-size: var(--font-size-lg);
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
 }
 
 .brand small {
   display: block;
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
 }
 
 .brandMark {
   display: inline-grid;
   place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-deep));
-  color: white;
-  font-weight: 700;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 18px;
+  background: linear-gradient(160deg, var(--color-primary), var(--color-primary-deep));
+  color: #fff8f3;
+  font-weight: 800;
   letter-spacing: 0.08em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .navToggle {
   display: none;
   width: 2.75rem;
   height: 2.75rem;
-  border-radius: var(--radius-full);
+  border-radius: 14px;
   border: 1px solid var(--color-border);
+  background: rgba(255, 252, 247, 0.92);
   align-items: center;
   justify-content: center;
   gap: 4px;
@@ -169,65 +177,129 @@ textarea {
   gap: var(--spacing-sm);
 }
 
+.app-navSectionLabel {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.app-navActions,
+.app-navPrimary {
+  display: grid;
+  gap: 10px;
+}
+
+.app-navAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  font-weight: 700;
+  transition: transform var(--transition-base), border-color var(--transition-base),
+    background-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.app-navAction:hover,
+.app-navLink:hover,
+.sampleCard:hover,
+.buttonPrimary:hover,
+.buttonSecondary:hover,
+.buttonGhost:hover,
+.buttonDanger:hover {
+  transform: translateY(-1px);
+}
+
+.app-navActionPrimary {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-deep));
+  color: #fff8f3;
+  box-shadow: var(--shadow-sm);
+}
+
+.app-navActionSecondary {
+  background: rgba(255, 252, 247, 0.94);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
 .app-navMeta {
   margin-top: auto;
   padding-top: var(--spacing-lg);
   border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: 10px;
+}
+
+.app-navMetaTitle {
+  font-family: var(--font-family-display);
+  font-size: 1rem;
+}
+
+.app-navMetaText {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .app-navLink {
   display: inline-flex;
   align-items: center;
-  min-height: 2.8rem;
-  padding: 0.65rem 0.85rem;
+  min-height: 3rem;
+  padding: 0.8rem 0.95rem;
   border: 1px solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: 16px;
   color: var(--color-text-secondary);
+  background: rgba(255, 252, 247, 0.44);
 }
 
 .app-navLink:hover {
   color: var(--color-text-primary);
-  background: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 252, 247, 0.92);
   border-color: var(--color-border);
 }
 
 .app-navLinkActive {
   color: var(--color-primary-deep);
-  background: white;
-  border-color: rgba(217, 73, 99, 0.18);
+  background: var(--color-surface-strong);
+  border-color: rgba(180, 35, 53, 0.18);
   box-shadow: var(--shadow-sm);
 }
 
 .pageShell {
-  max-width: 1240px;
+  max-width: 1320px;
   margin: 0 auto;
   display: grid;
-  gap: var(--spacing-xl);
+  gap: 28px;
 }
 
 .pageHeader {
   display: grid;
-  gap: var(--spacing-sm);
+  gap: 12px;
+  max-width: 72rem;
 }
 
 .eyebrow {
   color: var(--color-primary-deep);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: var(--font-size-sm);
+  letter-spacing: 0.16em;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .pageTitle {
   font-family: var(--font-family-display);
-  font-size: clamp(2rem, 4vw, 3.4rem);
-  line-height: 1.08;
-  max-width: 14ch;
+  font-size: clamp(2.4rem, 5vw, 4.4rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  max-width: 13ch;
 }
 
 .pageSubtitle {
-  max-width: 58rem;
+  max-width: 60rem;
   color: var(--color-text-secondary);
+  font-size: 1rem;
 }
 
 .panelHeading,
@@ -251,12 +323,41 @@ textarea {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(18px);
 }
 
 .sectionCard,
 .formCard {
   padding: var(--spacing-xl);
+}
+
+.overviewStrip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.overviewNote {
+  display: grid;
+  gap: 14px;
+  padding: 28px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 249, 0.98), rgba(247, 240, 230, 0.92));
+  box-shadow: var(--shadow-sm);
+}
+
+.overviewNote h2 {
+  font-family: var(--font-family-display);
+  font-size: clamp(1.35rem, 2vw, 1.85rem);
+  line-height: 1.15;
+}
+
+.sectionLabel {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 
 .metricGrid,
@@ -274,18 +375,23 @@ textarea {
 }
 
 .metricCard {
-  padding: var(--spacing-lg);
+  padding: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 249, 0.98), rgba(245, 238, 228, 0.9));
 }
 
 .metricLabel {
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .metricValue {
   display: block;
   margin-top: var(--spacing-sm);
   font-family: var(--font-family-display);
-  font-size: clamp(2rem, 3vw, 2.7rem);
+  font-size: clamp(2.2rem, 3vw, 2.9rem);
   line-height: 1;
 }
 
@@ -299,7 +405,7 @@ textarea {
 }
 
 .sampleCardGrid {
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 .compactCards {
@@ -311,13 +417,10 @@ textarea {
   overflow: hidden;
   border-radius: var(--radius-xl);
   border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 253, 249, 0.95);
   box-shadow: var(--shadow-sm);
-}
-
-.sampleCard:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  transition: transform var(--transition-base), box-shadow var(--transition-base),
+    border-color var(--transition-base);
 }
 
 .sampleCardLink {
@@ -347,6 +450,20 @@ textarea {
   justify-content: space-between;
   gap: var(--spacing-sm);
   font-size: var(--font-size-sm);
+}
+
+.sampleLibraryGrid {
+  grid-template-columns: 1fr;
+}
+
+.sampleLibraryGrid .sampleCardLink {
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.sampleLibraryGrid .mediaThumb {
+  height: 100%;
+  min-height: 220px;
 }
 
 .mediaThumb {
@@ -379,25 +496,27 @@ textarea {
   justify-content: center;
   min-height: 2.9rem;
   padding: 0.7rem 1.1rem;
-  border-radius: var(--radius-full);
+  border-radius: 14px;
   font-weight: 600;
   border: 1px solid transparent;
+  transition: transform var(--transition-base), border-color var(--transition-base),
+    background-color var(--transition-base), box-shadow var(--transition-base), color var(--transition-base);
 }
 
 .buttonPrimary {
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-deep));
-  color: white;
+  color: #fff8f3;
   box-shadow: var(--shadow-sm);
 }
 
 .buttonSecondary {
-  background: white;
+  background: var(--color-surface-strong);
   border-color: var(--color-border);
   color: var(--color-text-primary);
 }
 
 .buttonGhost {
-  background: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 252, 247, 0.82);
   border-color: var(--color-border);
   color: var(--color-text-primary);
 }
@@ -409,8 +528,8 @@ textarea {
 }
 
 .buttonSelected {
-  background: white;
-  border-color: rgba(217, 73, 99, 0.22);
+  background: var(--color-surface-strong);
+  border-color: rgba(180, 35, 53, 0.22);
   color: var(--color-primary-deep);
 }
 
@@ -463,10 +582,10 @@ textarea {
   gap: var(--spacing-xs);
   min-height: 1.8rem;
   padding: 0.15rem 0.7rem;
-  border-radius: var(--radius-full);
+  border-radius: 999px;
   font-size: var(--font-size-sm);
   border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 252, 247, 0.9);
 }
 
 .chipMuted {
@@ -510,16 +629,16 @@ textarea {
 
 .chartBarTrack {
   width: 100%;
-  height: 0.8rem;
+  height: 0.7rem;
   border-radius: var(--radius-full);
-  background: rgba(100, 116, 139, 0.12);
+  background: rgba(141, 129, 119, 0.14);
   overflow: hidden;
 }
 
 .chartBarFill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--color-primary), rgba(217, 73, 99, 0.55));
+  background: linear-gradient(90deg, var(--color-primary), rgba(180, 35, 53, 0.5));
 }
 
 .chartBarFillAlt {
@@ -549,7 +668,7 @@ textarea {
   padding: var(--spacing-lg);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 252, 247, 0.86);
 }
 
 .infoCard {
@@ -561,8 +680,9 @@ textarea {
   white-space: pre-wrap;
   padding: var(--spacing-lg);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 252, 247, 0.86);
   border: 1px solid var(--color-border);
+  line-height: 1.75;
 }
 
 .imageGrid {
@@ -609,7 +729,8 @@ textarea {
   overflow: auto;
   overscroll-behavior: contain;
   padding: var(--spacing-xl);
-  background: rgba(255, 250, 245, 0.96);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(246, 238, 227, 0.98));
   border-left: 1px solid var(--color-border);
   box-shadow: var(--shadow-lg);
 }
@@ -662,12 +783,24 @@ textarea {
 .sampleCardActions {
   padding: 0 var(--spacing-lg) var(--spacing-lg);
   border-top: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 252, 247, 0.82);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @media (max-width: 1180px) {
   .filterGrid,
-  .metricGrid {
+  .metricGrid,
+  .overviewStrip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -682,6 +815,7 @@ textarea {
     height: auto;
     border-right: 0;
     border-bottom: 1px solid var(--color-border);
+    padding: 18px;
   }
 
   .navToggle {
@@ -690,6 +824,7 @@ textarea {
 
   .app-navLinks {
     display: none;
+    padding-top: 12px;
   }
 
   .app-navLinksOpen {
@@ -697,14 +832,16 @@ textarea {
   }
 
   .appContent {
-    padding: var(--spacing-lg);
+    padding: 24px 18px 40px;
   }
 
   .twoColumnGrid,
   .contentColumns,
   .infoGrid,
   .filterGrid,
-  .metricGrid {
+  .metricGrid,
+  .overviewStrip,
+  .sampleLibraryGrid .sampleCardLink {
     grid-template-columns: 1fr;
   }
 }
@@ -730,10 +867,15 @@ textarea {
     align-items: stretch;
   }
 
+  .sampleLibraryGrid .mediaThumb {
+    min-height: 180px;
+  }
+
   .buttonPrimary,
   .buttonSecondary,
   .buttonGhost,
-  .buttonDanger {
+  .buttonDanger,
+  .app-navAction {
     width: 100%;
   }
 }

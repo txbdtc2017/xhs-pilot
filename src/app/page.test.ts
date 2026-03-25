@@ -23,4 +23,6 @@ test('home page content does not render the app version badge directly', () => {
   }));
 
   assert.doesNotMatch(html, /版本 v0\.2\.0/);
+  assert.match(html, /内容资产总览/);
+  assert.match(html, /你的内容资产、风格线索与创作动作，都在这里汇总/);
 });

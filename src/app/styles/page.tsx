@@ -1,25 +1,30 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { StyleProfileCreator } from '@/components/style-profile-creator';
 import { listStyleProfiles } from '@/lib/style-profiles';
 
 export const dynamic = 'force-dynamic';
 
-export default async function StyleProfilesPage() {
-  const { profiles } = await listStyleProfiles();
-
+export function StyleProfilesPageContent({
+  profiles,
+  creator,
+}: {
+  profiles: Awaited<ReturnType<typeof listStyleProfiles>>['profiles'];
+  creator?: ReactNode;
+}) {
   return (
     <div className="pageShell">
       <header className="pageHeader">
-        <p className="eyebrow">Style Profiles</p>
-        <h1 className="pageTitle">先手动分组，再观察系统已经沉淀出哪些风格簇。</h1>
+        <p className="eyebrow">风格集合</p>
+        <h1 className="pageTitle">把高价值样本策展成可复用的风格集合。</h1>
         <p className="pageSubtitle">
-          当前阶段的画像是人工策展工具，不做自动推荐和自动归纳。你决定分组，系统只负责把关联样本和高频标签展示清楚。
+          这里不是自动归纳引擎，而是人工策展工具。你决定哪些样本该被放在一起，系统负责把这些集合的标签和成员展示清楚。
         </p>
       </header>
 
-      <StyleProfileCreator />
+      {creator ?? null}
 
-      <section className="sampleCardGrid">
+      <section className="sampleCardGrid profileCollectionGrid">
         {profiles.length > 0 ? (
           profiles.map((profile) => (
             <Link className="sampleCard" href={`/styles/${profile.id}`} key={profile.id}>
@@ -51,4 +56,10 @@ export default async function StyleProfilesPage() {
       </section>
     </div>
   );
+}
+
+export default async function StyleProfilesPage() {
+  const { profiles } = await listStyleProfiles();
+
+  return <StyleProfilesPageContent profiles={profiles} creator={<StyleProfileCreator />} />;
 }

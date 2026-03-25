@@ -20,20 +20,39 @@ export function HomePageContent({ stats }: { stats: DashboardStats }) {
   return (
     <div className="pageShell">
       <header className="pageHeader">
-        <p className="eyebrow">Dashboard</p>
-        <h1 className="pageTitle">看清系统沉淀了什么，最近又在产生什么。</h1>
+        <p className="eyebrow">内容资产总览</p>
+        <h1 className="pageTitle">你的内容资产、风格线索与创作动作，都在这里汇总。</h1>
         <p className="pageSubtitle">
-          这里展示样本资产规模、分布、最近活动和高频参考，帮助你判断内容库是否在持续变得更可用。
+          先看样本沉淀是否在持续扩张，再看最近引用、生成和风格聚合，决定下一步该补什么、写什么。
         </p>
       </header>
 
+      <section className="overviewStrip">
+        <article className="overviewNote">
+          <p className="sectionLabel">Archive</p>
+          <h2>去内容档案库补样本、补标签、补可引用素材。</h2>
+          <p className="mutedText">先把资产喂扎实，后面的检索、策略和生成才会越来越稳。</p>
+          <Link className="buttonSecondary" href="/samples">
+            查看内容档案
+          </Link>
+        </article>
+        <article className="overviewNote">
+          <p className="sectionLabel">Creation</p>
+          <h2>带着最近沉淀的风格线索，直接进入创作工作台。</h2>
+          <p className="mutedText">把主题、目标和风格偏好交给系统，再观察它如何检索和制定策略。</p>
+          <Link className="buttonPrimary" href="/create">
+            开始创作
+          </Link>
+        </article>
+      </section>
+
       <section className="metricGrid">
         <article className="metricCard">
-          <p className="metricLabel">总样本数</p>
+          <p className="metricLabel">已沉淀样本</p>
           <strong className="metricValue">{stats.overview.total_samples}</strong>
         </article>
         <article className="metricCard">
-          <p className="metricLabel">本周新增</p>
+          <p className="metricLabel">近 7 天新增</p>
           <strong className="metricValue">{stats.overview.new_samples_this_week}</strong>
         </article>
         <article className="metricCard">
@@ -41,7 +60,7 @@ export function HomePageContent({ stats }: { stats: DashboardStats }) {
           <strong className="metricValue">{stats.overview.high_value_samples}</strong>
         </article>
         <article className="metricCard">
-          <p className="metricLabel">风格画像</p>
+          <p className="metricLabel">已策展风格集合</p>
           <strong className="metricValue">{stats.overview.style_profiles}</strong>
         </article>
       </section>
@@ -50,7 +69,7 @@ export function HomePageContent({ stats }: { stats: DashboardStats }) {
         <article className="sectionCard">
           <div className="panelHeading">
             <div>
-              <p className="eyebrow">Track Distribution</p>
+              <p className="eyebrow">Archive Signals</p>
               <h2 className="panelTitle">赛道分布</h2>
             </div>
           </div>
@@ -80,7 +99,7 @@ export function HomePageContent({ stats }: { stats: DashboardStats }) {
         <article className="sectionCard">
           <div className="panelHeading">
             <div>
-              <p className="eyebrow">Content Type</p>
+              <p className="eyebrow">Reading Map</p>
               <h2 className="panelTitle">内容类型分布</h2>
             </div>
           </div>
@@ -112,11 +131,11 @@ export function HomePageContent({ stats }: { stats: DashboardStats }) {
         <article className="sectionCard">
           <div className="panelHeading">
             <div>
-              <p className="eyebrow">Recent Samples</p>
+              <p className="eyebrow">Fresh Archive</p>
               <h2 className="panelTitle">最近录入的样本</h2>
             </div>
             <Link className="buttonGhost" href="/samples">
-              查看样本库
+              查看内容档案
             </Link>
           </div>
 
@@ -142,11 +161,11 @@ export function HomePageContent({ stats }: { stats: DashboardStats }) {
         <article className="sectionCard">
           <div className="panelHeading">
             <div>
-              <p className="eyebrow">Recent Tasks</p>
+              <p className="eyebrow">Recent Writing Runs</p>
               <h2 className="panelTitle">最近生成任务</h2>
             </div>
             <Link className="buttonGhost" href="/create">
-              去创作工作台
+              去创作台
             </Link>
           </div>
 
@@ -171,7 +190,7 @@ export function HomePageContent({ stats }: { stats: DashboardStats }) {
       <section className="sectionCard">
         <div className="panelHeading">
           <div>
-            <p className="eyebrow">Top References</p>
+            <p className="eyebrow">Reference Ranking</p>
             <h2 className="panelTitle">热门参考样本</h2>
           </div>
         </div>

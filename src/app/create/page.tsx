@@ -15,6 +15,7 @@ import {
   type CreatePageAction,
   type CreateStreamEvent,
 } from './state';
+import { createPageCopy } from './copy';
 import styles from './page.module.css';
 
 function getErrorMessage(error: unknown): string {
@@ -217,18 +218,16 @@ function CreatePageClient() {
     <main className={styles.page}>
       <div className={styles.shell}>
         <header className={styles.hero}>
-          <p className={styles.eyebrow}>Phase 4 Creation Studio</p>
-          <h1 className={styles.title}>让策略可见，让生成可追踪。</h1>
-          <p className={styles.subtitle}>
-            左侧定义任务，中间实时观察 Agent 的理解、检索与策略过程，右侧接收流式生成内容并在完成后切换为结构化结果。
-          </p>
+          <p className={styles.eyebrow}>{createPageCopy.heroEyebrow}</p>
+          <h1 className={styles.title}>{createPageCopy.heroTitle}</h1>
+          <p className={styles.subtitle}>{createPageCopy.heroSubtitle}</p>
         </header>
 
         <div className={styles.grid}>
           <form className={styles.panel} onSubmit={handleSubmit}>
             <div className={styles.panelHeader}>
               <div className={styles.panelTitle}>任务输入</div>
-              <div className={styles.panelHint}>只保留 Phase 4 主链路需要的字段。</div>
+              <div className={styles.panelHint}>先明确主题、目标和风格偏好，再把任务送入参考驱动的创作链路。</div>
             </div>
 
             <label className={styles.field}>
@@ -334,8 +333,8 @@ function CreatePageClient() {
 
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
-              <div className={styles.panelTitle}>Agent 策略区</div>
-              <div className={styles.panelHint}>展示任务理解、样本检索、策略快照和生成进度。</div>
+              <div className={styles.panelTitle}>策略与检索时间线</div>
+              <div className={styles.panelHint}>这里公开展示系统如何理解任务、筛选参考和形成最终写作策略。</div>
             </div>
 
             <article className={styles.stepCard}>
@@ -474,8 +473,8 @@ function CreatePageClient() {
 
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
-              <div className={styles.panelTitle}>生成结果区</div>
-              <div className={styles.panelHint}>先展示流式文本，完成后切换为结构化结果。</div>
+              <div className={styles.panelTitle}>生成稿与结构化结果</div>
+              <div className={styles.panelHint}>先接收流式草稿，再把标题、开头、正文、CTA 和标签整理成可直接使用的结果。</div>
             </div>
 
             {state.outputs ? (
@@ -536,7 +535,7 @@ function CreatePageClient() {
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
               <div className={styles.panelTitle}>历史任务</div>
-              <div className={styles.panelHint}>复用现有生成历史 API，选中后在右侧查看完整链路。</div>
+              <div className={styles.panelHint}>回看之前的任务输入、参考分配、策略快照和生成结果。</div>
             </div>
 
             {state.historyError ? <div className={styles.errorBox}>{state.historyError}</div> : null}
@@ -575,7 +574,7 @@ function CreatePageClient() {
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
               <div className={styles.panelTitle}>历史链路详情</div>
-              <div className={styles.panelHint}>展示任务输入、参考模式、参考样本、策略、输出与反馈。</div>
+              <div className={styles.panelHint}>把一条任务的输入、参考、策略、输出和反馈完整摊开，方便你判断哪些风格值得继续复用。</div>
             </div>
 
             {state.selectedHistoryDetail ? (
@@ -704,9 +703,9 @@ export default function CreatePage() {
         <main className={styles.page}>
           <div className={styles.shell}>
             <header className={styles.hero}>
-              <p className={styles.eyebrow}>Phase 4 Creation Studio</p>
-              <h1 className={styles.title}>让策略可见，让生成可追踪。</h1>
-              <p className={styles.subtitle}>正在加载创作工作台…</p>
+              <p className={styles.eyebrow}>{createPageCopy.heroEyebrow}</p>
+              <h1 className={styles.title}>{createPageCopy.heroTitle}</h1>
+              <p className={styles.subtitle}>{createPageCopy.fallbackSubtitle}</p>
             </header>
           </div>
         </main>
