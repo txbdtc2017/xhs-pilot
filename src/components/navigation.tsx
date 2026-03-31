@@ -34,20 +34,22 @@ export function NavigationContent({
   onToggle,
 }: NavigationContentProps) {
   return (
-    <header className="app-nav">
-      <div className="app-navHeader">
-        <Link className="brand" href="/" onClick={onNavigate}>
-          <span className="brandMark">XP</span>
-          <span>
-            <strong>XHS Pilot</strong>
-            <small>内容档案、风格策展与创作工作台</small>
-          </span>
-        </Link>
+    <header className="workbenchBar">
+      <div className="workbenchBarInner">
+        <div className="workbenchLead">
+          <Link className="brand workbenchBrand" href="/" onClick={onNavigate}>
+            <span className="brandMark">XP</span>
+            <span>
+              <strong>XHS Pilot</strong>
+              <small>内容采集与创作</small>
+            </span>
+          </Link>
+        </div>
 
         <button
           aria-expanded={isOpen}
           aria-label="切换导航"
-          className="navToggle"
+          className="workbenchToggle"
           type="button"
           onClick={onToggle}
         >
@@ -55,38 +57,34 @@ export function NavigationContent({
           <span />
           <span />
         </button>
-      </div>
 
-      <div className={`app-navLinks ${isOpen ? 'app-navLinksOpen' : ''}`}>
-        <div className="app-navSectionLabel">主操作</div>
-        <div className="app-navActions">
-          <Link className="app-navAction app-navActionPrimary" href="/samples" onClick={onNavigate}>
-            录入样本
-          </Link>
-          <Link className="app-navAction app-navActionSecondary" href="/create" onClick={onNavigate}>
-            开始创作
-          </Link>
-        </div>
+        <div className={`workbenchTray ${isOpen ? 'workbenchTrayOpen' : ''}`}>
+          <div className="workbenchSection">
+            <div className="workbenchSectionLabel">导航</div>
+            <nav className="workbenchNav">
+              {NAV_ITEMS.map((item) => (
+                <Link
+                  key={item.href}
+                  className={`workbenchNavLink ${isActive(pathname, item.href) ? 'workbenchNavLinkActive' : ''}`}
+                  href={item.href}
+                  onClick={onNavigate}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
 
-        <div className="app-navSectionLabel">工作台</div>
-        <nav className="app-navPrimary">
-          {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              className={`app-navLink ${isActive(pathname, item.href) ? 'app-navLinkActive' : ''}`}
-              href={item.href}
-              onClick={onNavigate}
-            >
-              {item.label}
+          <div className="workbenchActionGroup">
+            <Link className="buttonSecondary" href="/samples" onClick={onNavigate}>
+              录入样本
             </Link>
-          ))}
-        </nav>
-      </div>
-
-      <div className="app-navMeta">
-        <p className="app-navMetaTitle">单用户内容研究台</p>
-        <p className="app-navMetaText">先沉淀样本，再归类风格，最后带着参考进入创作。</p>
-        <span className="badge badgeNeutral">版本 v{APP_VERSION}</span>
+            <Link className="buttonPrimary" href="/create" onClick={onNavigate}>
+              开始创作
+            </Link>
+            <span className="badge badgeNeutral">版本 v{APP_VERSION}</span>
+          </div>
+        </div>
       </div>
     </header>
   );

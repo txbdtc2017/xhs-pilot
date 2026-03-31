@@ -135,7 +135,7 @@ export function StyleProfileEditor({
       <form className="formCard" onSubmit={handleMetaSubmit}>
         <div className="panelHeading">
           <div>
-            <p className="eyebrow">Profile Settings</p>
+            <p className="eyebrow">档案设置</p>
             <h2 className="panelTitle">风格档案信息</h2>
           </div>
         </div>
@@ -162,7 +162,7 @@ export function StyleProfileEditor({
       <form className="formCard" onSubmit={handleAddSample}>
         <div className="panelHeading">
           <div>
-            <p className="eyebrow">Curation</p>
+            <p className="eyebrow">策展维护</p>
             <h2 className="panelTitle">把样本纳入当前集合</h2>
           </div>
         </div>
@@ -186,7 +186,7 @@ export function StyleProfileEditor({
       <div className="sectionCard">
         <div className="panelHeading">
           <div>
-            <p className="eyebrow">Membership</p>
+            <p className="eyebrow">成员列表</p>
             <h2 className="panelTitle">当前样本</h2>
           </div>
         </div>

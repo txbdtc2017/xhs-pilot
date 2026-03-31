@@ -15,9 +15,9 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body>
         <PwaRegister />
-        <div className="appLayout">
+        <div className="appWorkbench">
           <Navigation />
-          <main className="appContent">{children}</main>
+          <main className="workbenchMain">{children}</main>
         </div>
       </body>
     </html>

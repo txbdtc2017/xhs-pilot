@@ -24,6 +24,7 @@ import {
   saveTaskStrategy,
   updateTask,
 } from './repository';
+import { resolveGenerationCapabilityStatus } from './capability';
 
 export const dynamic = 'force-dynamic';
 
@@ -108,6 +109,17 @@ export function createGeneratePostHandler(
 
       if (!taskInput) {
         return NextResponse.json({ error: 'topic is required' }, { status: 400 });
+      }
+
+      const capabilityStatus = resolveGenerationCapabilityStatus(process.env);
+      if (!capabilityStatus.available) {
+        return NextResponse.json(
+          {
+            error: capabilityStatus.message,
+            code: capabilityStatus.code,
+          },
+          { status: 409 },
+        );
       }
 
       const task = await dependencies.createTask(taskInput);

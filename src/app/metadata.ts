@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 export const appMetadata: Metadata = {
   title: 'XHS Pilot',
-  description: '小红书内容资产、检索与创作工作台。',
+  description: '小红书内容研究、档案与参考式创作工作台。',
   applicationName: 'XHS Pilot',
   appleWebApp: {
     capable: true,

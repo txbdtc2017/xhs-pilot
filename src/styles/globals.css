@@ -88,38 +88,44 @@ textarea {
   resize: vertical;
 }
 
-.appLayout {
+.appWorkbench {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: var(--layout-nav-width) minmax(0, 1fr);
-  align-items: start;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
-.appContent {
+.workbenchMain {
   min-width: 0;
-  padding: 40px 40px 56px;
+  padding: 24px 28px 44px;
 }
 
-.app-nav {
+.workbenchBar {
   position: sticky;
   top: 0;
-  align-self: start;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-  padding: 32px 28px;
-  border-right: 1px solid var(--color-border);
+  z-index: 40;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border);
   background:
-    linear-gradient(180deg, rgba(255, 252, 248, 0.94), rgba(248, 242, 234, 0.98)),
-    linear-gradient(90deg, rgba(126, 98, 68, 0.04) 1px, transparent 1px);
-  background-size: auto, 28px 28px;
+    linear-gradient(180deg, rgba(252, 249, 244, 0.96), rgba(247, 241, 232, 0.98)),
+    linear-gradient(90deg, rgba(113, 94, 71, 0.05) 1px, transparent 1px);
+  backdrop-filter: blur(12px);
+  background-size: auto, 22px 22px;
 }
 
-.app-navHeader {
+.workbenchBarInner {
+  max-width: 1480px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-lg);
+  align-items: center;
+}
+
+.workbenchLead {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 18px;
+  min-width: 0;
 }
 
 .brand {
@@ -145,19 +151,38 @@ textarea {
   place-items: center;
   width: 2.75rem;
   height: 2.75rem;
-  border-radius: 18px;
+  border-radius: 12px;
   background: linear-gradient(160deg, var(--color-primary), var(--color-primary-deep));
   color: #fff8f3;
   font-weight: 800;
   letter-spacing: 0.08em;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 8px 22px rgba(64, 39, 31, 0.08);
 }
 
-.navToggle {
+.workbenchBrand {
+  flex: 0 0 auto;
+}
+
+.workbenchContext {
+  min-width: 0;
+  padding-left: 18px;
+  border-left: 1px solid var(--color-border);
+}
+
+.workbenchContextText {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workbenchToggle {
   display: none;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 14px;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 12px;
   border: 1px solid var(--color-border);
   background: rgba(255, 252, 247, 0.92);
   align-items: center;
@@ -165,46 +190,54 @@ textarea {
   gap: 4px;
 }
 
-.navToggle span {
+.workbenchToggle span {
   display: block;
   width: 1.1rem;
   height: 2px;
   background: var(--color-text-primary);
 }
 
-.app-navLinks {
-  display: grid;
-  gap: var(--spacing-sm);
+.workbenchTray {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
 }
 
-.app-navSectionLabel {
+.workbenchSection,
+.workbenchActionGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.workbenchSectionLabel {
   color: var(--color-text-tertiary);
   font-size: 11px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
-.app-navActions,
-.app-navPrimary {
-  display: grid;
-  gap: 10px;
+.workbenchNav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.app-navAction {
+.workbenchNavLink {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-height: 3rem;
-  padding: 0.8rem 1rem;
+  min-height: 2.35rem;
+  padding: 0.5rem 0.8rem;
+  border-radius: 999px;
   border: 1px solid transparent;
-  border-radius: 16px;
-  font-weight: 700;
-  transition: transform var(--transition-base), border-color var(--transition-base),
-    background-color var(--transition-base), box-shadow var(--transition-base);
+  color: var(--color-text-secondary);
+  background: rgba(255, 252, 247, 0.55);
 }
 
-.app-navAction:hover,
-.app-navLink:hover,
+.workbenchNavLink:hover,
+.workbenchNavLinkActive,
 .sampleCard:hover,
 .buttonPrimary:hover,
 .buttonSecondary:hover,
@@ -213,54 +246,12 @@ textarea {
   transform: translateY(-1px);
 }
 
-.app-navActionPrimary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-deep));
-  color: #fff8f3;
-  box-shadow: var(--shadow-sm);
-}
-
-.app-navActionSecondary {
-  background: rgba(255, 252, 247, 0.94);
-  border-color: var(--color-border);
+.workbenchNavLink:hover {
   color: var(--color-text-primary);
+  border-color: rgba(78, 61, 45, 0.12);
 }
 
-.app-navMeta {
-  margin-top: auto;
-  padding-top: var(--spacing-lg);
-  border-top: 1px solid var(--color-border);
-  display: grid;
-  gap: 10px;
-}
-
-.app-navMetaTitle {
-  font-family: var(--font-family-display);
-  font-size: 1rem;
-}
-
-.app-navMetaText {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.app-navLink {
-  display: inline-flex;
-  align-items: center;
-  min-height: 3rem;
-  padding: 0.8rem 0.95rem;
-  border: 1px solid transparent;
-  border-radius: 16px;
-  color: var(--color-text-secondary);
-  background: rgba(255, 252, 247, 0.44);
-}
-
-.app-navLink:hover {
-  color: var(--color-text-primary);
-  background: rgba(255, 252, 247, 0.92);
-  border-color: var(--color-border);
-}
-
-.app-navLinkActive {
+.workbenchNavLinkActive {
   color: var(--color-primary-deep);
   background: var(--color-surface-strong);
   border-color: rgba(180, 35, 53, 0.18);
@@ -268,16 +259,17 @@ textarea {
 }
 
 .pageShell {
-  max-width: 1320px;
+  max-width: 1480px;
   margin: 0 auto;
   display: grid;
-  gap: 28px;
+  gap: 20px;
 }
 
 .pageHeader {
   display: grid;
-  gap: 12px;
-  max-width: 72rem;
+  gap: 8px;
+  max-width: 84rem;
+  padding-bottom: 8px;
 }
 
 .eyebrow {
@@ -290,16 +282,77 @@ textarea {
 
 .pageTitle {
   font-family: var(--font-family-display);
-  font-size: clamp(2.4rem, 5vw, 4.4rem);
-  line-height: 0.98;
+  font-size: clamp(1.9rem, 4vw, 3.2rem);
+  line-height: 1.02;
   letter-spacing: -0.03em;
-  max-width: 13ch;
+  max-width: 16ch;
 }
 
 .pageSubtitle {
-  max-width: 60rem;
+  max-width: 72rem;
   color: var(--color-text-secondary);
+  font-size: 0.96rem;
+}
+
+.pageHeaderCompact {
+  gap: 6px;
+}
+
+.dashboardHeader {
+  display: grid;
+  gap: 2px;
+  padding: 4px 0 2px;
+}
+
+.dashboardHeaderTitle {
   font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.dashboardHero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 6px 0 4px;
+}
+
+.dashboardHeroCopy {
+  display: grid;
+  gap: 8px;
+  max-width: 56rem;
+}
+
+.dashboardHeroMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dashboardHeroTitle {
+  max-width: 14ch;
+  font-family: var(--font-family);
+  font-size: clamp(1.85rem, 3.2vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  text-wrap: pretty;
+}
+
+.dashboardHeroSubtitle {
+  max-width: 48rem;
+  color: var(--color-text-secondary);
+  font-size: 0.96rem;
+  line-height: 1.65;
+}
+
+.dashboardHeroActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .panelHeading,
@@ -319,7 +372,7 @@ textarea {
 .sectionCard,
 .metricCard,
 .formCard {
-  background: var(--color-surface);
+  background: var(--color-surface-strong);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
@@ -360,6 +413,26 @@ textarea {
   text-transform: uppercase;
 }
 
+.commandPanel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+}
+
+.commandPanelMain {
+  display: grid;
+  gap: 8px;
+  max-width: 54rem;
+}
+
+.commandPanelActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .metricGrid,
 .twoColumnGrid,
 .contentColumns,
@@ -374,10 +447,14 @@ textarea {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.metricGridCompact {
+  gap: 12px;
+}
+
 .metricCard {
-  padding: 22px;
+  padding: 18px;
   background:
-    linear-gradient(180deg, rgba(255, 253, 249, 0.98), rgba(245, 238, 228, 0.9));
+    linear-gradient(180deg, rgba(255, 253, 249, 0.98), rgba(246, 240, 231, 0.92));
 }
 
 .metricLabel {
@@ -391,7 +468,7 @@ textarea {
   display: block;
   margin-top: var(--spacing-sm);
   font-family: var(--font-family-display);
-  font-size: clamp(2.2rem, 3vw, 2.9rem);
+  font-size: clamp(1.9rem, 3vw, 2.4rem);
   line-height: 1;
 }
 
@@ -402,6 +479,10 @@ textarea {
 
 .compactGrid {
   margin-top: var(--spacing-lg);
+}
+
+.dashboardGrid {
+  align-items: start;
 }
 
 .sampleCardGrid {
@@ -464,6 +545,188 @@ textarea {
 .sampleLibraryGrid .mediaThumb {
   height: 100%;
   min-height: 220px;
+}
+
+.archiveToolbarCard,
+.archiveTableCard {
+  gap: 14px;
+}
+
+.archiveToolbarCard {
+  background:
+    linear-gradient(180deg, rgba(255, 253, 249, 0.98), rgba(246, 239, 230, 0.9));
+}
+
+.archiveToolbarHeading {
+  align-items: flex-start;
+}
+
+.archiveFilterForm {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.archiveFilterLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.88fr);
+  gap: var(--spacing-lg);
+  align-items: stretch;
+}
+
+.archiveFilterGroup {
+  display: grid;
+  gap: 14px;
+  min-height: 100%;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(74, 58, 44, 0.09);
+  background: rgba(255, 252, 247, 0.76);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.archiveFilterGroupHeader {
+  display: grid;
+  gap: 4px;
+}
+
+.archiveFilterGroupTitle {
+  font-family: var(--font-family-display);
+  font-size: 1.05rem;
+  line-height: 1.2;
+  color: var(--color-secondary);
+}
+
+.archiveFilterGroupHint {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.archiveFilterKeyword .formInput {
+  min-height: 3.35rem;
+}
+
+.archiveFilterPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-md);
+}
+
+.archiveFilterTimeline {
+  align-content: start;
+}
+
+.archiveFilterActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.archiveFilterActions .buttonPrimary,
+.archiveFilterActions .buttonSecondary {
+  min-width: 132px;
+}
+
+.archiveTableHeader {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.4fr) minmax(240px, 1fr) minmax(180px, 0.75fr) auto;
+  gap: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.archiveRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.archiveRow:last-child,
+.archiveIndexRow:last-child {
+  border-bottom: 0;
+}
+
+.archiveRowMain {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.4fr) minmax(240px, 1fr) minmax(180px, 0.75fr);
+  gap: 14px;
+  color: inherit;
+  align-items: center;
+}
+
+.archiveIdentity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.archiveThumb {
+  flex: 0 0 72px;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: linear-gradient(135deg, rgba(217, 73, 99, 0.12), rgba(64, 111, 163, 0.1));
+}
+
+.archiveThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.archiveIdentityBody,
+.archiveIndexMain {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.archiveTitle {
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.archiveSignals,
+.archiveState,
+.archiveIndexMeta {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+}
+
+.archiveRowActions {
+  display: flex;
+  align-items: center;
+}
+
+.archiveIndexRow {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(260px, 1fr);
+  gap: 18px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dossierSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+}
+
+.dossierColumns {
+  align-items: start;
 }
 
 .mediaThumb {
@@ -798,57 +1061,110 @@ textarea {
 }
 
 @media (max-width: 1180px) {
+  .archiveFilterLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .archiveFilterPair,
   .filterGrid,
   .metricGrid,
   .overviewStrip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-}
 
-@media (max-width: 960px) {
-  .appLayout {
+  .archiveTableHeader {
+    display: none;
+  }
+
+  .archiveRow,
+  .archiveIndexRow {
     grid-template-columns: 1fr;
   }
 
-  .app-nav {
-    position: static;
-    height: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--color-border);
-    padding: 18px;
+  .archiveRowMain,
+  .archiveIndexRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 960px) {
+  .workbenchBar {
+    padding: 12px 14px;
   }
 
-  .navToggle {
+  .workbenchBarInner {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .workbenchLead {
+    gap: 12px;
+  }
+
+  .workbenchContext {
+    display: none;
+  }
+
+  .workbenchToggle {
     display: inline-flex;
   }
 
-  .app-navLinks {
+  .workbenchTray {
     display: none;
+    grid-column: 1 / -1;
     padding-top: 12px;
+    border-top: 1px solid var(--color-border);
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .app-navLinksOpen {
-    display: grid;
+  .workbenchTrayOpen {
+    display: flex;
   }
 
-  .appContent {
-    padding: 24px 18px 40px;
+  .workbenchSection,
+  .workbenchActionGroup {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .twoColumnGrid,
   .contentColumns,
   .infoGrid,
+  .archiveFilterPair,
   .filterGrid,
   .metricGrid,
   .overviewStrip,
   .sampleLibraryGrid .sampleCardLink {
     grid-template-columns: 1fr;
   }
+
+  .archiveFilterActions {
+    justify-content: stretch;
+    flex-direction: column;
+  }
+
+  .archiveFilterActions .buttonPrimary,
+  .archiveFilterActions .buttonSecondary {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .commandPanel,
+  .dossierSummary,
+  .dashboardHero {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 @media (max-width: 680px) {
   .pageTitle {
     max-width: none;
+  }
+
+  .dashboardHeroTitle {
+    max-width: none;
+    font-size: clamp(1.7rem, 8vw, 2.4rem);
   }
 
   .sectionCard,
@@ -874,8 +1190,11 @@ textarea {
   .buttonPrimary,
   .buttonSecondary,
   .buttonGhost,
-  .buttonDanger,
-  .app-navAction {
+  .buttonDanger {
     width: 100%;
+  }
+
+  .workbenchMain {
+    padding: 18px 14px 34px;
   }
 }

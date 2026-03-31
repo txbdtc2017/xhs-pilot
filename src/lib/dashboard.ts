@@ -1,5 +1,7 @@
 import { query, queryOne } from './db';
 
+const ACTIVE_SAMPLE_PREDICATE = 's.deleted_at IS NULL';
+
 export interface DashboardOverview {
   total_samples: number;
   new_samples_this_week: number;
@@ -46,6 +48,88 @@ export interface DashboardStats {
   top_references: DashboardTopReference[];
 }
 
+export function buildDashboardTotalSamplesQuery() {
+  return `SELECT COUNT(*)::int AS total FROM samples s WHERE ${ACTIVE_SAMPLE_PREDICATE}`;
+}
+
+export function buildDashboardNewSamplesQuery() {
+  return `SELECT COUNT(*)::int AS total FROM samples s WHERE ${ACTIVE_SAMPLE_PREDICATE} AND s.created_at >= DATE_TRUNC('week', NOW())`;
+}
+
+export function buildDashboardHighValueSamplesQuery() {
+  return `SELECT COUNT(*)::int AS total FROM samples s WHERE ${ACTIVE_SAMPLE_PREDICATE} AND s.is_high_value = true`;
+}
+
+export function buildDashboardTrackDistributionQuery() {
+  return `
+    SELECT COALESCE(sa.track, '未分类') AS label, COUNT(*)::int AS count
+    FROM samples s
+    LEFT JOIN sample_analysis sa ON sa.sample_id = s.id
+    WHERE ${ACTIVE_SAMPLE_PREDICATE}
+    GROUP BY COALESCE(sa.track, '未分类')
+    ORDER BY count DESC, label ASC
+    LIMIT 8
+  `;
+}
+
+export function buildDashboardContentTypeDistributionQuery() {
+  return `
+    SELECT COALESCE(sa.content_type, '未分类') AS label, COUNT(*)::int AS count
+    FROM samples s
+    LEFT JOIN sample_analysis sa ON sa.sample_id = s.id
+    WHERE ${ACTIVE_SAMPLE_PREDICATE}
+    GROUP BY COALESCE(sa.content_type, '未分类')
+    ORDER BY count DESC, label ASC
+    LIMIT 8
+  `;
+}
+
+export function buildDashboardRecentSamplesQuery() {
+  return `
+    SELECT
+      s.id,
+      s.title,
+      s.status,
+      s.created_at,
+      sa.track,
+      sa.content_type,
+      (
+        SELECT si.image_url
+        FROM sample_images si
+        WHERE si.sample_id = s.id AND si.image_type = 'cover'
+        ORDER BY si.sort_order ASC
+        LIMIT 1
+      ) AS cover_url
+    FROM samples s
+    LEFT JOIN sample_analysis sa ON sa.sample_id = s.id
+    WHERE ${ACTIVE_SAMPLE_PREDICATE}
+    ORDER BY s.created_at DESC
+    LIMIT 5
+  `;
+}
+
+export function buildDashboardTopReferencesQuery() {
+  return `
+    SELECT
+      s.id,
+      s.title,
+      COUNT(tr.id)::int AS reference_count,
+      (
+        SELECT si.image_url
+        FROM sample_images si
+        WHERE si.sample_id = s.id AND si.image_type = 'cover'
+        ORDER BY si.sort_order ASC
+        LIMIT 1
+      ) AS cover_url
+    FROM task_references tr
+    INNER JOIN samples s ON s.id = tr.sample_id
+    WHERE ${ACTIVE_SAMPLE_PREDICATE}
+    GROUP BY s.id, s.title
+    ORDER BY reference_count DESC, s.title ASC
+    LIMIT 5
+  `;
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
   const [
     totalSamplesRow,
@@ -58,56 +142,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     recentTasks,
     topReferences,
   ] = await Promise.all([
-    queryOne<{ total: number }>(`SELECT COUNT(*)::int AS total FROM samples`),
-    queryOne<{ total: number }>(
-      `SELECT COUNT(*)::int AS total FROM samples WHERE created_at >= DATE_TRUNC('week', NOW())`,
-    ),
-    queryOne<{ total: number }>(
-      `SELECT COUNT(*)::int AS total FROM samples WHERE is_high_value = true`,
-    ),
+    queryOne<{ total: number }>(buildDashboardTotalSamplesQuery()),
+    queryOne<{ total: number }>(buildDashboardNewSamplesQuery()),
+    queryOne<{ total: number }>(buildDashboardHighValueSamplesQuery()),
     queryOne<{ total: number }>(`SELECT COUNT(*)::int AS total FROM style_profiles`),
-    query<DashboardDistributionRow>(
-      `
-        SELECT COALESCE(sa.track, '未分类') AS label, COUNT(*)::int AS count
-        FROM samples s
-        LEFT JOIN sample_analysis sa ON sa.sample_id = s.id
-        GROUP BY COALESCE(sa.track, '未分类')
-        ORDER BY count DESC, label ASC
-        LIMIT 8
-      `,
-    ),
-    query<DashboardDistributionRow>(
-      `
-        SELECT COALESCE(sa.content_type, '未分类') AS label, COUNT(*)::int AS count
-        FROM samples s
-        LEFT JOIN sample_analysis sa ON sa.sample_id = s.id
-        GROUP BY COALESCE(sa.content_type, '未分类')
-        ORDER BY count DESC, label ASC
-        LIMIT 8
-      `,
-    ),
-    query<DashboardRecentSample>(
-      `
-        SELECT
-          s.id,
-          s.title,
-          s.status,
-          s.created_at,
-          sa.track,
-          sa.content_type,
-          (
-            SELECT si.image_url
-            FROM sample_images si
-            WHERE si.sample_id = s.id AND si.image_type = 'cover'
-            ORDER BY si.sort_order ASC
-            LIMIT 1
-          ) AS cover_url
-        FROM samples s
-        LEFT JOIN sample_analysis sa ON sa.sample_id = s.id
-        ORDER BY s.created_at DESC
-        LIMIT 5
-      `,
-    ),
+    query<DashboardDistributionRow>(buildDashboardTrackDistributionQuery()),
+    query<DashboardDistributionRow>(buildDashboardContentTypeDistributionQuery()),
+    query<DashboardRecentSample>(buildDashboardRecentSamplesQuery()),
     query<DashboardRecentTask>(
       `
         SELECT id, topic, status, reference_mode, created_at
@@ -116,26 +157,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         LIMIT 5
       `,
     ),
-    query<DashboardTopReference>(
-      `
-        SELECT
-          s.id,
-          s.title,
-          COUNT(tr.id)::int AS reference_count,
-          (
-            SELECT si.image_url
-            FROM sample_images si
-            WHERE si.sample_id = s.id AND si.image_type = 'cover'
-            ORDER BY si.sort_order ASC
-            LIMIT 1
-          ) AS cover_url
-        FROM task_references tr
-        INNER JOIN samples s ON s.id = tr.sample_id
-        GROUP BY s.id, s.title
-        ORDER BY reference_count DESC, s.title ASC
-        LIMIT 5
-      `,
-    ),
+    query<DashboardTopReference>(buildDashboardTopReferencesQuery()),
   ]);
 
   return {

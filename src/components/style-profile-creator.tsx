@@ -48,8 +48,8 @@ export function StyleProfileCreator() {
     <form className="formCard" onSubmit={handleSubmit}>
       <div className="panelHeading">
         <div>
-          <p className="eyebrow">Create Collection</p>
-          <h2 className="panelTitle">新建一个手动策展的风格集合</h2>
+          <p className="eyebrow">新建画像</p>
+          <h2 className="panelTitle">新建风格画像</h2>
         </div>
       </div>
 

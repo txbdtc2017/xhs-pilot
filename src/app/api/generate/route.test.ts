@@ -221,6 +221,60 @@ test('POST /api/generate streams understanding, references, strategy, generation
   });
 });
 
+test('POST /api/generate rejects unsupported Kimi anthropic generation before task creation', async () => {
+  const originalProtocol = process.env.LLM_PROTOCOL;
+  const originalBaseUrl = process.env.LLM_BASE_URL;
+  let createTaskCalled = false;
+
+  process.env.LLM_PROTOCOL = 'anthropic-messages';
+  process.env.LLM_BASE_URL = 'https://api.kimi.com/coding/';
+
+  try {
+    const POST = createGeneratePostHandler({
+      createTask: async () => {
+        createTaskCalled = true;
+        return { id: 'task-unsupported' };
+      },
+      updateTask: async () => {},
+      saveTaskReferences: async () => {},
+      saveTaskStrategy: async () => {},
+      saveTaskOutputs: async () => {},
+      understandTask: async () => createTaskUnderstanding(),
+      retrieveTaskReferencesFromUnderstanding: async () => ({
+        searchMode: 'hybrid' as const,
+        searchModeReason: null,
+        referenceMode: 'referenced' as const,
+        similarSamples: [],
+        taskUnderstanding: createTaskUnderstanding(),
+        taskEmbedding: [],
+      }),
+      startStrategyStream: async () => ({
+        partialObjectStream: createAsyncIterable([createStrategyResult()]),
+        object: Promise.resolve(createStrategyResult()),
+      }),
+      startGenerationStream: async () => ({
+        textStream: createAsyncIterable([createGenerationTemplate()]),
+      }),
+    });
+
+    const response = await POST(new Request('http://localhost/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic: '不兼容配置任务' }),
+    }));
+
+    assert.equal(response.status, 409);
+    assert.deepEqual(await response.json(), {
+      error: '当前 Kimi Anthropic 配置暂不支持内容生成，请切换 provider 或启用兼容模式。',
+      code: 'GENERATION_UNSUPPORTED_PROVIDER',
+    });
+    assert.equal(createTaskCalled, false);
+  } finally {
+    process.env.LLM_PROTOCOL = originalProtocol;
+    process.env.LLM_BASE_URL = originalBaseUrl;
+  }
+});
+
 test('POST /api/generate emits zero-shot references when retrieval falls back', async () => {
   const POST = createGeneratePostHandler({
     createTask: async () => ({ id: 'task-zero' }),

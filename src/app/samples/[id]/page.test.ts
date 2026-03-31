@@ -39,4 +39,5 @@ test('sample detail content shows restore actions for deleted samples', () => {
   assert.match(html, /彻底删除/);
   assert.doesNotMatch(html, /移入回收站/);
   assert.match(html, /样本档案/);
+  assert.match(html, /页面导航/);
 });

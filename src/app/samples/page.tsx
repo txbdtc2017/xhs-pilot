@@ -1,7 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { SampleIngestDrawer } from '@/components/sample-ingest-drawer';
 import { SampleTrashActions } from '@/components/sample-trash-actions';
 import { SampleStatusAutoRefresh } from '@/components/sample-status-auto-refresh';
 import { StatusBadge } from '@/components/status-badge';
@@ -76,7 +75,6 @@ type SamplesPageContentProps = {
     total: number;
   };
   hasActiveSamples: boolean;
-  ingestControl?: ReactNode;
   statusRefreshControl?: ReactNode;
 };
 
@@ -88,7 +86,6 @@ export function SamplesPageContent({
   options,
   result,
   hasActiveSamples,
-  ingestControl,
   statusRefreshControl,
 }: SamplesPageContentProps) {
   const isTrashView = filters.view === 'trash';
@@ -100,130 +97,158 @@ export function SamplesPageContent({
       {statusRefreshControl === undefined ? (
         <SampleStatusAutoRefresh isActive={!isTrashView && hasActiveSamples} />
       ) : statusRefreshControl}
-      <header className="pageHeader">
-        <p className="eyebrow">内容档案库</p>
+      <header className="pageHeader pageHeaderCompact">
+        <p className="eyebrow">内容档案</p>
         <h1 className="pageTitle">
-          {isTrashView
-            ? '回收站里的样本仍是你的资产，只是暂时退出主档案。'
-            : '把样本沉淀成可检索、可归类、可再创作的内容档案。'}
+          {isTrashView ? '回收站' : '样本库'}
         </h1>
         <p className="pageSubtitle">
           {isTrashView
-            ? '这里仅显示已移入回收站的样本。恢复后会回到主档案；彻底删除会同步清理记录与关联图片。'
-            : '先通过筛选把样本缩到合适范围，再根据状态、标签和被引用价值决定哪些内容值得继续沉淀。'}
+            ? '恢复后会回到主档案；彻底删除会同步清理记录与关联图片。'
+            : '按关键词、标签、状态和时间筛选样本。'}
         </p>
       </header>
 
-      <section className="sectionCard">
+      <section className="sectionCard archiveToolbarCard">
         <div className="stackMd">
-          <div className="viewToggle">
-            <Link
-              className={`buttonGhost ${!isTrashView ? 'buttonSelected' : ''}`}
-              href={activeHref}
-            >
-              正常样本
-            </Link>
-            <Link
-              className={`buttonGhost ${isTrashView ? 'buttonSelected' : ''}`}
-              href={trashHref}
-            >
-              回收站
-            </Link>
+          <div className="panelHeading archiveToolbarHeading">
+            <div>
+              <p className="sectionLabel">检索与筛选</p>
+              <h2 className="panelTitle">{isTrashView ? '回收站视图' : '主档案视图'}</h2>
+            </div>
+            <div className="viewToggle">
+              <Link
+                className={`buttonGhost ${!isTrashView ? 'buttonSelected' : ''}`}
+                href={activeHref}
+              >
+                正常样本
+              </Link>
+              <Link
+                className={`buttonGhost ${isTrashView ? 'buttonSelected' : ''}`}
+                href={trashHref}
+              >
+                回收站
+              </Link>
+            </div>
           </div>
 
-          <div className="toolbarRow">
-            <form className="filterGrid" method="GET">
-              <input name="view" type="hidden" value={filters.view} />
-              <label className="fieldStack">
-                <span className="fieldLabel">关键词</span>
-                <input className="formInput" defaultValue={filters.search} name="search" />
-              </label>
+          <form className="archiveFilterForm" method="GET">
+            <input name="view" type="hidden" value={filters.view} />
+            <div className="archiveFilterLayout">
+              <section className="archiveFilterGroup archiveFilterContent" aria-label="内容检索">
+                <div className="archiveFilterGroupHeader">
+                  <h3 className="archiveFilterGroupTitle">内容检索</h3>
+                  <p className="archiveFilterGroupHint">先用关键词、赛道和风格标签快速收窄范围。</p>
+                </div>
 
-              <label className="fieldStack">
-                <span className="fieldLabel">赛道</span>
-                <select className="formSelect" defaultValue={filters.track} name="track">
-                  <option value="">全部</option>
-                  {options.tracks.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <label className="fieldStack archiveFilterKeyword">
+                  <span className="fieldLabel">关键词</span>
+                  <input className="formInput" defaultValue={filters.search} name="search" />
+                </label>
 
-              <label className="fieldStack">
-                <span className="fieldLabel">内容类型</span>
-                <select className="formSelect" defaultValue={filters.contentType} name="content_type">
-                  <option value="">全部</option>
-                  {options.contentTypes.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <div className="archiveFilterPair">
+                  <label className="fieldStack">
+                    <span className="fieldLabel">赛道</span>
+                    <select className="formSelect" defaultValue={filters.track} name="track">
+                      <option value="">全部</option>
+                      {options.tracks.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-              <label className="fieldStack">
-                <span className="fieldLabel">封面风格</span>
-                <select className="formSelect" defaultValue={filters.coverStyle} name="cover_style">
-                  <option value="">全部</option>
-                  {options.coverStyles.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <label className="fieldStack">
+                    <span className="fieldLabel">内容类型</span>
+                    <select className="formSelect" defaultValue={filters.contentType} name="content_type">
+                      <option value="">全部</option>
+                      {options.contentTypes.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
 
-              <label className="fieldStack">
-                <span className="fieldLabel">高价值</span>
-                <select className="formSelect" defaultValue={filters.isHighValue} name="is_high_value">
-                  <option value="">全部</option>
-                  <option value="true">仅高价值</option>
-                  <option value="false">仅普通</option>
-                </select>
-              </label>
+                <div className="archiveFilterPair">
+                  <label className="fieldStack">
+                    <span className="fieldLabel">封面风格</span>
+                    <select className="formSelect" defaultValue={filters.coverStyle} name="cover_style">
+                      <option value="">全部</option>
+                      {options.coverStyles.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-              <label className="fieldStack">
-                <span className="fieldLabel">开始日期</span>
-                <input className="formInput" defaultValue={filters.dateFrom} name="date_from" type="date" />
-              </label>
+                  <label className="fieldStack">
+                    <span className="fieldLabel">高价值</span>
+                    <select className="formSelect" defaultValue={filters.isHighValue} name="is_high_value">
+                      <option value="">全部</option>
+                      <option value="true">仅高价值</option>
+                      <option value="false">仅普通</option>
+                    </select>
+                  </label>
+                </div>
+              </section>
 
-              <label className="fieldStack">
-                <span className="fieldLabel">结束日期</span>
-                <input className="formInput" defaultValue={filters.dateTo} name="date_to" type="date" />
-              </label>
+              <section className="archiveFilterGroup archiveFilterTimeline" aria-label="时间范围">
+                <div className="archiveFilterGroupHeader">
+                  <h3 className="archiveFilterGroupTitle">时间范围</h3>
+                  <p className="archiveFilterGroupHint">按录入时间回看近期内容，或锁定一段历史窗口。</p>
+                </div>
 
-              <div className="inlineActions">
-                <button className="buttonSecondary" type="submit">
-                  应用筛选
-                </button>
-                <Link className="buttonGhost" href={createSamplesHref(query, {
-                  page: undefined,
-                  search: undefined,
-                  track: undefined,
-                  content_type: undefined,
-                  cover_style: undefined,
-                  is_high_value: undefined,
-                  date_from: undefined,
-                  date_to: undefined,
-                })}>
-                  重置
-                </Link>
-              </div>
-            </form>
+                <label className="fieldStack">
+                  <span className="fieldLabel">开始日期</span>
+                  <input className="formInput" defaultValue={filters.dateFrom} name="date_from" type="date" />
+                </label>
 
-            {!isTrashView ? ingestControl : null}
-          </div>
+                <label className="fieldStack">
+                  <span className="fieldLabel">结束日期</span>
+                  <input className="formInput" defaultValue={filters.dateTo} name="date_to" type="date" />
+                </label>
+
+                <div className="archiveFilterActions">
+                  <button className="buttonPrimary" type="submit">
+                    应用筛选
+                  </button>
+                  <Link className="buttonSecondary" href={createSamplesHref(query, {
+                    page: undefined,
+                    search: undefined,
+                    track: undefined,
+                    content_type: undefined,
+                    cover_style: undefined,
+                    is_high_value: undefined,
+                    date_from: undefined,
+                    date_to: undefined,
+                  })}>
+                    重置
+                  </Link>
+                </div>
+              </section>
+            </div>
+          </form>
         </div>
       </section>
 
-      <section className="sampleCardGrid sampleLibraryGrid">
+      <section className="sectionCard archiveTableCard">
+        <div className="archiveTableHeader" aria-hidden="true">
+          <span>样本</span>
+          <span>标签与分析</span>
+          <span>状态与价值</span>
+          <span>动作</span>
+        </div>
+
         {result.samples.length > 0 ? (
           result.samples.map((sample) => (
-            <article className="sampleCard" key={sample.id}>
-              <Link className="sampleCardLink" href={`/samples/${sample.id}`}>
-                <div className="mediaThumb">
+            <article className="archiveRow" key={sample.id}>
+              <Link className="archiveRowMain" href={`/samples/${sample.id}`}>
+                <div className="archiveIdentity">
+                  <div className="archiveThumb">
                   {sample.cover_url ? (
                     <Image
                       alt={sample.title}
@@ -233,32 +258,36 @@ export function SamplesPageContent({
                       width={960}
                     />
                   ) : (
-                    <div className="mediaThumbPlaceholder">No Cover</div>
+                      <div className="mediaThumbPlaceholder">No Cover</div>
                   )}
-                </div>
-
-                <div className="sampleCardBody">
-                  <div className="inlineMeta">
-                    <StatusBadge status={sample.status} />
-                    {sample.is_high_value ? <span className="badge badgeWarning">高价值</span> : null}
                   </div>
 
-                  <h2>{sample.title}</h2>
+                  <div className="archiveIdentityBody">
+                    <strong className="archiveTitle">{sample.title}</strong>
+                    <p className="mutedText">
+                      更新于 {new Date(sample.created_at).toLocaleDateString('zh-CN')}
+                    </p>
+                  </div>
+                </div>
 
+                <div className="archiveSignals">
                   <div className="chipList">
                     {sample.track ? <span className="chip">{sample.track}</span> : null}
                     {sample.content_type ? <span className="chip">{sample.content_type}</span> : null}
                     {sample.cover_style_tag ? <span className="chip">{sample.cover_style_tag}</span> : null}
                   </div>
+                  <p className="mutedText">被引用 {sample.reference_count} 次</p>
+                </div>
 
-                  <div className="sampleCardMeta">
-                    <span>被引用 {sample.reference_count} 次</span>
-                    <span>{new Date(sample.created_at).toLocaleDateString('zh-CN')}</span>
+                <div className="archiveState">
+                  <div className="inlineMeta">
+                    <StatusBadge status={sample.status} />
+                    {sample.is_high_value ? <span className="badge badgeWarning">高价值</span> : null}
                   </div>
                 </div>
               </Link>
 
-              <div className="sampleCardActions">
+              <div className="archiveRowActions">
                 <SampleTrashActions context="list" sampleId={sample.id} view={filters.view} />
               </div>
             </article>
@@ -345,7 +374,6 @@ export default async function SamplesPage({ searchParams }: SamplesPageProps) {
         dateTo,
       }}
       hasActiveSamples={hasActiveSamples}
-      ingestControl={<SampleIngestDrawer />}
       options={options}
       query={query}
       result={result}

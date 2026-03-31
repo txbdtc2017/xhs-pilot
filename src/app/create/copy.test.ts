@@ -3,9 +3,9 @@ import test from 'node:test';
 
 import { createPageCopy } from './copy';
 
-test('create page copy frames the studio as a reference-driven creation workspace', () => {
-  assert.equal(createPageCopy.heroEyebrow, 'Creation Workspace');
-  assert.equal(createPageCopy.heroTitle, '让内容参考有据，让创作链路可见。');
-  assert.match(createPageCopy.heroSubtitle, /检索样本/);
-  assert.match(createPageCopy.fallbackSubtitle, /正在加载创作工作台/);
+test('create page copy stays neutral and avoids redesign concept wording', () => {
+  assert.equal(createPageCopy.heroEyebrow, 'Create');
+  assert.equal(createPageCopy.heroTitle, '创作工作台');
+  assert.equal(createPageCopy.heroSubtitle, '输入主题、参考偏好和目标后开始生成。');
+  assert.equal(createPageCopy.fallbackSubtitle, '正在加载创作工作台…');
 });

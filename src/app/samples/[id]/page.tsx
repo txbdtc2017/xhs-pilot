@@ -58,6 +58,13 @@ export function SampleDetailPageContent({
   const ctaTypeTags = readStringArray(analysis, 'cta_type_tags');
   const replicableRules = readStringArray(analysis, 'replicable_rules');
   const avoidPoints = readStringArray(analysis, 'avoid_points');
+  const sectionLinks = [
+    { id: 'sample-source', label: '原始内容' },
+    { id: 'sample-parsed', label: '解析结果' },
+    { id: 'sample-cognitive', label: '认知结果' },
+    { id: 'sample-relations', label: '关系网络' },
+    { id: 'sample-manual', label: '人工修正' },
+  ];
 
   return (
     <div className="pageShell">
@@ -84,8 +91,22 @@ export function SampleDetailPageContent({
         <SampleTrashActions context="detail" sampleId={id} view={isDeleted ? 'trash' : 'active'} />
       </header>
 
-      <section className="contentColumns">
-        <article className="sectionCard">
+      <section className="sectionCard dossierSummary">
+        <div>
+          <p className="sectionLabel">页面导航</p>
+          <h2 className="panelTitle">跳转到当前样本的不同区块。</h2>
+        </div>
+        <nav className="chipList" aria-label="页面导航">
+          {sectionLinks.map((section) => (
+            <a className="chip" href={`#${section.id}`} key={section.id}>
+              {section.label}
+            </a>
+          ))}
+        </nav>
+      </section>
+
+      <section className="contentColumns dossierColumns">
+        <article className="sectionCard" id="sample-source">
           <div className="panelHeading">
             <div>
               <p className="eyebrow">A. Source Material</p>
@@ -127,7 +148,7 @@ export function SampleDetailPageContent({
           </div>
         </article>
 
-        <article className="sectionCard">
+        <article className="sectionCard" id="sample-parsed">
           <div className="panelHeading">
             <div>
               <p className="eyebrow">B. Parsed Signals</p>
@@ -185,8 +206,8 @@ export function SampleDetailPageContent({
         </article>
       </section>
 
-      <section className="contentColumns">
-        <article className="sectionCard">
+      <section className="contentColumns dossierColumns">
+        <article className="sectionCard" id="sample-cognitive">
           <div className="panelHeading">
             <div>
               <p className="eyebrow">C. Cognitive Notes</p>
@@ -245,7 +266,7 @@ export function SampleDetailPageContent({
           </div>
         </article>
 
-        <article className="sectionCard">
+        <article className="sectionCard" id="sample-relations">
           <div className="panelHeading">
             <div>
               <p className="eyebrow">D. Relationship Map</p>
@@ -324,7 +345,7 @@ export function SampleDetailPageContent({
         </article>
       </section>
 
-      <section className="sectionCard">
+      <section className="sectionCard" id="sample-manual">
         <div className="panelHeading">
           <div>
             <p className="eyebrow">E. Manual Correction</p>

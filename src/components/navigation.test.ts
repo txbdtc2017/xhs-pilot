@@ -6,14 +6,16 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { APP_VERSION } from '../lib/app-version';
 import { NavigationContent } from './navigation';
 
-test('navigation renders the app version in the left-column footer area', () => {
+test('navigation renders the compact workbench bar with persistent primary actions', () => {
   const html = renderToStaticMarkup(createElement(NavigationContent, {
     pathname: '/',
     isOpen: false,
   }));
 
   assert.match(html, new RegExp(`版本 v${APP_VERSION}`));
-  assert.match(html, /app-navMeta/);
+  assert.match(html, /workbenchBar/);
   assert.match(html, /录入样本/);
   assert.match(html, /开始创作/);
+  assert.doesNotMatch(html, /研究工作台|导航与动作/);
+  assert.match(html, /XHS Pilot/);
 });

@@ -27,9 +27,9 @@ export default async function StyleProfileDetailPage({
 
   return (
     <div className="pageShell">
-      <header className="pageHeader">
+      <header className="pageHeader pageHeaderCompact">
         <Link className="buttonGhost" href="/styles">
-          返回风格集合
+          返回风格画像
         </Link>
         <p className="eyebrow">风格档案</p>
         <h1 className="pageTitle">{profile.name}</h1>
@@ -46,8 +46,19 @@ export default async function StyleProfileDetailPage({
         </div>
       </header>
 
-      <section className="contentColumns">
-        <div className="sectionCard">
+      <section className="sectionCard dossierSummary">
+        <div>
+          <p className="sectionLabel">页面导航</p>
+          <h2 className="panelTitle">快速跳转到当前画像的不同区块。</h2>
+        </div>
+        <nav className="chipList" aria-label="页面导航">
+          <a className="chip" href="#profile-members">样本成员</a>
+          <a className="chip" href="#profile-editor">编辑区</a>
+        </nav>
+      </section>
+
+      <section className="contentColumns dossierColumns">
+        <div className="sectionCard" id="profile-members">
           <div className="panelHeading">
             <div>
               <p className="eyebrow">Collection</p>
@@ -90,7 +101,8 @@ export default async function StyleProfileDetailPage({
           </div>
         </div>
 
-        <StyleProfileEditor
+        <div id="profile-editor">
+          <StyleProfileEditor
           availableSamples={availableSamples}
           initialDescription={profile.description || ''}
           initialName={profile.name}
@@ -101,6 +113,7 @@ export default async function StyleProfileDetailPage({
             status: sample.status,
           }))}
         />
+        </div>
       </section>
     </div>
   );

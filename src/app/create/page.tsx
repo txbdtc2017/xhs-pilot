@@ -16,6 +16,7 @@ import {
   type CreateStreamEvent,
 } from './state';
 import { createPageCopy } from './copy';
+import { CreateComposerForm, type CreateComposerFormClasses } from './composer-form';
 import styles from './page.module.css';
 
 function getErrorMessage(error: unknown): string {
@@ -223,123 +224,27 @@ function CreatePageClient() {
           <p className={styles.subtitle}>{createPageCopy.heroSubtitle}</p>
         </header>
 
-        <div className={styles.grid}>
-          <form className={styles.panel} onSubmit={handleSubmit}>
+        <CreateComposerForm
+          classes={styles as CreateComposerFormClasses}
+          form={state.form}
+          isSubmitting={state.isSubmitting}
+          error={state.error}
+          onSubmit={handleSubmit}
+          onFieldChange={(field, value) =>
+            dispatch({ type: 'form_changed', field, value })
+          }
+        />
+
+        <div className={styles.workspaceGrid}>
+          <section className={`${styles.panel} ${styles.flowPanel}`}>
             <div className={styles.panelHeader}>
-              <div className={styles.panelTitle}>任务输入</div>
-              <div className={styles.panelHint}>先明确主题、目标和风格偏好，再把任务送入参考驱动的创作链路。</div>
-            </div>
-
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>主题</span>
-              <textarea
-                className={styles.textarea}
-                value={state.form.topic}
-                onChange={(event) =>
-                  dispatch({ type: 'form_changed', field: 'topic', value: event.target.value })
-                }
-                placeholder="例如：写一篇让人想收藏的职场复盘笔记"
-              />
-            </label>
-
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>目标人群</span>
-              <input
-                className={styles.input}
-                value={state.form.targetAudience}
-                onChange={(event) =>
-                  dispatch({
-                    type: 'form_changed',
-                    field: 'targetAudience',
-                    value: event.target.value,
-                  })
-                }
-                placeholder="例如：3-5 年经验职场人"
-              />
-            </label>
-
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>目标效果</span>
-              <input
-                className={styles.input}
-                value={state.form.goal}
-                onChange={(event) =>
-                  dispatch({ type: 'form_changed', field: 'goal', value: event.target.value })
-                }
-                placeholder="例如：收藏 / 评论 / 转化"
-              />
-            </label>
-
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>风格倾向</span>
-              <input
-                className={styles.input}
-                value={state.form.stylePreference}
-                onChange={(event) =>
-                  dispatch({
-                    type: 'form_changed',
-                    field: 'stylePreference',
-                    value: event.target.value,
-                  })
-                }
-                placeholder="例如：专业直接、克制、有结论"
-              />
-            </label>
-
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>Persona Mode</span>
-              <select
-                className={styles.select}
-                value={state.form.personaMode}
-                onChange={(event) =>
-                  dispatch({
-                    type: 'form_changed',
-                    field: 'personaMode',
-                    value: event.target.value,
-                  })
-                }
-              >
-                <option value="balanced">balanced</option>
-                <option value="self">self</option>
-                <option value="strong_style">strong_style</option>
-              </select>
-            </label>
-
-            <label className={styles.checkboxRow}>
-              <input
-                type="checkbox"
-                checked={state.form.needCoverSuggestion}
-                onChange={(event) =>
-                  dispatch({
-                    type: 'form_changed',
-                    field: 'needCoverSuggestion',
-                    value: event.target.checked,
-                  })
-                }
-              />
-              <span>需要封面建议</span>
-            </label>
-
-            <button
-              className={styles.submitButton}
-              type="submit"
-              disabled={state.isSubmitting || !state.form.topic.trim()}
-            >
-              {state.isSubmitting ? '生成中...' : '生成'}
-            </button>
-
-            {state.error ? <div className={styles.errorBox}>{state.error}</div> : null}
-          </form>
-
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div className={styles.panelTitle}>策略与检索时间线</div>
-              <div className={styles.panelHint}>这里公开展示系统如何理解任务、筛选参考和形成最终写作策略。</div>
+              <div className={styles.panelTitle}>生成过程</div>
+              <div className={styles.panelHint}>查看任务理解、样本检索、策略生成和内容生成的过程。</div>
             </div>
 
             <article className={styles.stepCard}>
               <div className={styles.stepHeader}>
-                <div className={styles.stepTitle}>Step 1 · 任务理解</div>
+                <div className={styles.stepTitle}>01 · 任务理解</div>
                 {renderPill('understanding', state.step)}
               </div>
               {state.taskUnderstanding ? (
@@ -366,7 +271,7 @@ function CreatePageClient() {
 
             <article className={styles.stepCard}>
               <div className={styles.stepHeader}>
-                <div className={styles.stepTitle}>Step 2 · 样本检索</div>
+                <div className={styles.stepTitle}>02 · 参考检索</div>
                 {renderPill('searching', state.step)}
               </div>
               {state.references ? (
@@ -412,7 +317,7 @@ function CreatePageClient() {
 
             <article className={styles.stepCard}>
               <div className={styles.stepHeader}>
-                <div className={styles.stepTitle}>Step 3 · 策略制定</div>
+                <div className={styles.stepTitle}>03 · 策略形成</div>
                 {renderPill('strategizing', state.step)}
               </div>
               {state.strategySnapshot ? (
@@ -449,7 +354,7 @@ function CreatePageClient() {
 
             <article className={styles.stepCard}>
               <div className={styles.stepHeader}>
-                <div className={styles.stepTitle}>Step 4 · 生成中</div>
+                <div className={styles.stepTitle}>04 · 成稿生成</div>
                 {renderPill(state.outputs ? 'completed' : 'generating', state.step)}
               </div>
               <div className={styles.kvItem}>
@@ -471,10 +376,10 @@ function CreatePageClient() {
             </article>
           </section>
 
-          <section className={styles.panel}>
+          <section className={`${styles.panel} ${styles.draftPanel}`}>
             <div className={styles.panelHeader}>
-              <div className={styles.panelTitle}>生成稿与结构化结果</div>
-              <div className={styles.panelHint}>先接收流式草稿，再把标题、开头、正文、CTA 和标签整理成可直接使用的结果。</div>
+              <div className={styles.panelTitle}>生成结果</div>
+              <div className={styles.panelHint}>先接收流式文本，再整理成结构化结果。</div>
             </div>
 
             {state.outputs ? (
@@ -573,7 +478,7 @@ function CreatePageClient() {
 
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
-              <div className={styles.panelTitle}>历史链路详情</div>
+              <div className={styles.panelTitle}>历史详情</div>
               <div className={styles.panelHint}>把一条任务的输入、参考、策略、输出和反馈完整摊开，方便你判断哪些风格值得继续复用。</div>
             </div>
 

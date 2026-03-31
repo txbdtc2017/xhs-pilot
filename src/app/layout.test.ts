@@ -5,7 +5,7 @@ import { appMetadata } from './metadata';
 
 test('root metadata advertises the installed app shell', () => {
   assert.equal(appMetadata.title, 'XHS Pilot');
-  assert.equal(appMetadata.description, '小红书内容资产、检索与创作工作台。');
+  assert.equal(appMetadata.description, '小红书内容研究、档案与参考式创作工作台。');
   assert.deepEqual(appMetadata.applicationName, 'XHS Pilot');
   assert.deepEqual(appMetadata.appleWebApp, {
     capable: true,

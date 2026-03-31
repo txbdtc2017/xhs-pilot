@@ -14,28 +14,27 @@ export function StyleProfilesPageContent({
 }) {
   return (
     <div className="pageShell">
-      <header className="pageHeader">
-        <p className="eyebrow">风格集合</p>
-        <h1 className="pageTitle">把高价值样本策展成可复用的风格集合。</h1>
+      <header className="pageHeader pageHeaderCompact">
+        <p className="eyebrow">风格画像</p>
+        <h1 className="pageTitle">风格画像</h1>
         <p className="pageSubtitle">
-          这里不是自动归纳引擎，而是人工策展工具。你决定哪些样本该被放在一起，系统负责把这些集合的标签和成员展示清楚。
+          手动创建、维护和查看风格画像。
         </p>
       </header>
 
       {creator ?? null}
 
-      <section className="sampleCardGrid profileCollectionGrid">
+      <section className="sectionCard archiveTableCard">
         {profiles.length > 0 ? (
           profiles.map((profile) => (
-            <Link className="sampleCard" href={`/styles/${profile.id}`} key={profile.id}>
-              <div className="sampleCardBody">
-                <div className="inlineMeta">
-                  <span className="badge badgeInfo">{profile.sample_count} 个样本</span>
-                </div>
-
-                <h2>{profile.name}</h2>
+            <Link className="archiveIndexRow" href={`/styles/${profile.id}`} key={profile.id}>
+              <div className="archiveIndexMain">
+                <strong className="archiveTitle">{profile.name}</strong>
                 <p className="mutedText">{profile.description || '暂无描述'}</p>
+              </div>
 
+              <div className="archiveIndexMeta">
+                <span className="badge badgeInfo">{profile.sample_count} 个样本</span>
                 <div className="chipList">
                   {profile.typical_tags.length > 0 ? (
                     profile.typical_tags.slice(0, 6).map((tag) => (

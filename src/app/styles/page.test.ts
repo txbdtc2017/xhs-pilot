@@ -22,7 +22,7 @@ test('style profiles page content presents the curated collection framing', () =
     }),
   );
 
-  assert.match(html, /风格集合/);
-  assert.match(html, /策展/);
+  assert.match(html, /风格画像/);
   assert.match(html, /职场清单收藏风/);
+  assert.doesNotMatch(html, /风格索引|人工策展台/);
 });

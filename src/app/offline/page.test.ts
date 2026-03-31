@@ -8,7 +8,8 @@ import OfflinePage from './page';
 test('offline page explains the limited offline experience', () => {
   const html = renderToStaticMarkup(createElement(OfflinePage));
 
-  assert.match(html, /你当前处于离线状态/);
-  assert.match(html, /离线时仍可查看已缓存的工作台外壳/);
-  assert.match(html, /返回资产总览/);
+  assert.match(html, /离线/);
+  assert.match(html, /当前设备离线/);
+  assert.match(html, /返回首页/);
+  assert.doesNotMatch(html, /离线工作台外壳|创作轨道|资产指挥台/);
 });

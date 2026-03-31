@@ -18,7 +18,7 @@ const sampleListItem = {
   created_at: '2026-03-20T00:00:00.000Z',
 };
 
-test('samples page content shows ingest entry and trash action for active samples', () => {
+test('samples page content keeps the filter card focused and omits the ingest entry for active samples', () => {
   assert.equal(typeof samplesPageModule.SamplesPageContent, 'function');
 
   const html = renderToStaticMarkup(
@@ -41,7 +41,6 @@ test('samples page content shows ingest entry and trash action for active sample
         contentTypes: ['清单'],
         coverStyles: ['高对比大字'],
       },
-      ingestControl: createElement('button', { className: 'buttonPrimary', type: 'button' }, '录入样本'),
       statusRefreshControl: null,
       result: {
         samples: [sampleListItem],
@@ -51,10 +50,13 @@ test('samples page content shows ingest entry and trash action for active sample
     }),
   );
 
-  assert.match(html, /录入样本/);
   assert.match(html, /移入回收站/);
-  assert.match(html, /内容档案库/);
-  assert.match(html, /把样本沉淀成可检索、可归类、可再创作的内容档案/);
+  assert.match(html, /内容档案/);
+  assert.match(html, /检索与筛选/);
+  assert.match(html, /内容检索/);
+  assert.match(html, /时间范围/);
+  assert.doesNotMatch(html, /录入样本/);
+  assert.doesNotMatch(html, /研究档案台/);
 });
 
 test('samples page content hides ingest entry and shows restore actions in trash view', () => {
@@ -80,7 +82,6 @@ test('samples page content hides ingest entry and shows restore actions in trash
         contentTypes: [],
         coverStyles: [],
       },
-      ingestControl: createElement('button', { className: 'buttonPrimary', type: 'button' }, '录入样本'),
       statusRefreshControl: null,
       result: {
         samples: [sampleListItem],

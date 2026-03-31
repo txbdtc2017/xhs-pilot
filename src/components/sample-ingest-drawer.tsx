@@ -95,8 +95,8 @@ export function SampleIngestDrawer() {
       <aside className="drawerPanel">
         <div className="drawerHeader">
           <div>
-            <p className="eyebrow">Sample Ingestion</p>
-            <h2 className="drawerTitle">把新样本送进资产库</h2>
+            <p className="eyebrow">样本录入</p>
+            <h2 className="drawerTitle">录入样本</h2>
           </div>
 
           <button className="buttonGhost" type="button" onClick={() => setIsOpen(false)}>
