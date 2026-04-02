@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Product roadmap
-    url: https://github.com/txbdtc2017/xhs-pilot/blob/main/docs/roadmap.md
-    about: 查看哪些能力已明确放入后续 roadmap
-  - name: Release playbook
-    url: https://github.com/txbdtc2017/xhs-pilot/blob/main/docs/release-playbook.md
-    about: 查看发布前检查、tag 和 GitHub Release 流程
+  - name: Project scope
+    url: https://github.com/txbdtc2017/xhs-pilot/blob/main/README.md
+    about: 先确认项目定位、支持范围和快速开始
+  - name: Security policy
+    url: https://github.com/txbdtc2017/xhs-pilot/blob/main/SECURITY.md
+    about: 安全问题请不要公开提 issue，先看漏洞披露方式

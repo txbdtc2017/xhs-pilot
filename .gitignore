@@ -38,8 +38,13 @@ yarn-error.log*
 .vercel
 
 .codex
+.agents
+.superpowers
 
 uploads
+docs
+dev.log
+worker.log
 
 # typescript
 *.tsbuildinfo

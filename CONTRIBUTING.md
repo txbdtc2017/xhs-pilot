@@ -7,7 +7,7 @@
 ## 开始之前
 
 1. 先阅读 [README.md](README.md) 了解项目定位和启动方式。
-2. 如果你的改动会影响发布或产品边界，再看 [docs/release-playbook.md](docs/release-playbook.md) 和 [docs/roadmap.md](docs/roadmap.md)。
+2. 如果你的改动会影响发布方式或产品边界，请先在 issue 中说明背景和取舍。
 3. 优先从 issue 开始，而不是直接提交大改。
 
 ## 本地开发
@@ -74,7 +74,7 @@ docker compose config
 
 - Bug 报告请尽量附上复现步骤、环境、日志片段。
 - 功能请求请先说明使用场景，而不是直接下实现指令。
-- 对 roadmap 中已经明确延期的能力，建议在原 issue 中补充场景，而不是重复开新 issue。
+- 对明显超出当前产品边界的能力，建议先在已有 issue 中补充场景，或新开 issue 讨论是否纳入后续规划。
 
 ## 行为准则
 
