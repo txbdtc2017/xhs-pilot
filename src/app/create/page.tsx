@@ -10,6 +10,15 @@ import {
   normalizeHistoryTaskId,
 } from './history';
 import {
+  consumeImageJobEvents,
+  createImageJob,
+  createImagePlan,
+  fetchImageProviders,
+  fetchImageJobSnapshot,
+  selectImageAsset,
+  updateImagePlan,
+} from './image-api';
+import {
   createInitialCreateState,
   createPageReducer,
   type CreatePageAction,
@@ -17,6 +26,7 @@ import {
 } from './state';
 import { createPageCopy } from './copy';
 import { CreateComposerForm, type CreateComposerFormClasses } from './composer-form';
+import { ImageWorkbench, type ImageWorkbenchClasses } from './image-workbench';
 import styles from './page.module.css';
 
 function getErrorMessage(error: unknown): string {
@@ -94,22 +104,59 @@ function CreatePageClient() {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    void fetchImageProviders()
+      .then((payload) => {
+        if (!isMounted) {
+          return;
+        }
+
+        dispatch({
+          type: 'image_providers_loaded',
+          providers: payload.providers,
+          defaultProvider: payload.default_provider,
+        });
+      })
+      .catch((error) => {
+        if (!isMounted) {
+          return;
+        }
+
+        dispatch({ type: 'image_failed', message: getErrorMessage(error) });
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const preferredHistoryTaskId =
     requestedHistoryTaskId ?? state.selectedHistoryTaskId ?? state.historyTasks[0]?.id ?? null;
+  const preferredHistoryOutputId =
+    state.selectedHistoryTaskId === preferredHistoryTaskId ? state.selectedHistoryOutputId : null;
 
   useEffect(() => {
     if (!preferredHistoryTaskId) {
       return;
     }
 
-    if (state.selectedHistoryDetail?.task.id === preferredHistoryTaskId) {
+    if (
+      state.selectedHistoryDetail?.task.id === preferredHistoryTaskId &&
+      state.selectedHistoryDetail.selected_output_id === (preferredHistoryOutputId ?? state.selectedHistoryDetail.selected_output_id)
+    ) {
       return;
     }
 
     let isMounted = true;
-    dispatch({ type: 'history_detail_requested', taskId: preferredHistoryTaskId });
+    dispatch({
+      type: 'history_detail_requested',
+      taskId: preferredHistoryTaskId,
+      outputId: preferredHistoryOutputId,
+    });
 
-    void fetchHistoryTaskDetail(preferredHistoryTaskId)
+    void fetchHistoryTaskDetail(preferredHistoryTaskId, preferredHistoryOutputId)
       .then((detail) => {
         if (!isMounted) {
           return;
@@ -118,6 +165,7 @@ function CreatePageClient() {
         dispatch({
           type: 'history_detail_loaded',
           taskId: preferredHistoryTaskId,
+          outputId: preferredHistoryOutputId,
           detail,
         });
       })
@@ -132,7 +180,12 @@ function CreatePageClient() {
     return () => {
       isMounted = false;
     };
-  }, [preferredHistoryTaskId, state.selectedHistoryDetail?.task.id]);
+  }, [
+    preferredHistoryOutputId,
+    preferredHistoryTaskId,
+    state.selectedHistoryDetail?.selected_output_id,
+    state.selectedHistoryDetail?.task.id,
+  ]);
 
   useEffect(() => {
     if (!state.taskId || requestedHistoryTaskId === state.taskId) {
@@ -141,6 +194,54 @@ function CreatePageClient() {
 
     router.replace(buildHistoryTaskHref(state.taskId));
   }, [requestedHistoryTaskId, router, state.taskId]);
+
+  useEffect(() => {
+    const imageJobId = state.selectedHistoryDetail?.active_image_job?.id;
+    const imageTaskId = state.selectedHistoryDetail?.task.id;
+
+    if (!imageJobId || !imageTaskId) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const refreshSnapshot = async () => {
+      const snapshot = await fetchImageJobSnapshot(imageJobId);
+      startTransition(() => {
+        dispatch({
+          type: 'image_job_snapshot_loaded',
+          taskId: imageTaskId,
+          snapshot,
+        });
+      });
+    };
+
+    void consumeImageJobEvents(
+      imageJobId,
+      () => {
+        void refreshSnapshot().catch((error) => {
+          startTransition(() => {
+            dispatch({
+              type: 'image_failed',
+              message: getErrorMessage(error),
+            });
+          });
+        });
+      },
+      { signal: controller.signal },
+    ).catch((error) => {
+      startTransition(() => {
+        dispatch({
+          type: 'image_failed',
+          message: getErrorMessage(error),
+        });
+      });
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [state.selectedHistoryDetail?.active_image_job?.id, state.selectedHistoryDetail?.task.id]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -215,6 +316,119 @@ function CreatePageClient() {
     router.replace(buildHistoryTaskHref(taskId));
   }
 
+  function handleHistoryOutputSelect(outputId: string) {
+    if (!preferredHistoryTaskId) {
+      return;
+    }
+
+    dispatch({
+      type: 'history_detail_requested',
+      taskId: preferredHistoryTaskId,
+      outputId,
+    });
+  }
+
+  async function handleCreateImagePlan() {
+    const detail = state.selectedHistoryDetail;
+    const outputId = state.selectedHistoryOutputId ?? detail?.selected_output_id ?? detail?.outputs?.id;
+    if (!detail || !outputId) {
+      return;
+    }
+
+    dispatch({ type: 'image_action_started' });
+
+    try {
+      const result = await createImagePlan(outputId, state.imageConfig);
+      dispatch({
+        type: 'image_plan_loaded',
+        taskId: detail.task.id,
+        outputId: result.selected_output.id,
+        plan: {
+          plan: result.plan,
+          pages: result.pages,
+          assets: [],
+          selected_assets: [],
+        },
+      });
+    } catch (error) {
+      dispatch({ type: 'image_failed', message: getErrorMessage(error) });
+    }
+  }
+
+  async function handleToggleImagePage(pageId: string, isEnabled: boolean) {
+    const detail = state.selectedHistoryDetail;
+    const planId = detail?.latest_image_plan?.plan.id;
+    if (!detail || !planId) {
+      return;
+    }
+
+    dispatch({ type: 'image_action_started' });
+
+    try {
+      const result = await updateImagePlan(planId, {
+        pages: [{ id: pageId, isEnabled }],
+      });
+      dispatch({
+        type: 'image_plan_loaded',
+        taskId: detail.task.id,
+        outputId: detail.selected_output_id ?? detail.outputs?.id ?? '',
+        plan: {
+          plan: result.plan,
+          pages: result.pages,
+          assets: detail.latest_image_plan?.assets ?? [],
+          selected_assets: detail.latest_image_plan?.selected_assets ?? [],
+        },
+      });
+    } catch (error) {
+      dispatch({ type: 'image_failed', message: getErrorMessage(error) });
+    }
+  }
+
+  async function runImageJob(scope: 'full' | 'page', planPageId?: string) {
+    const detail = state.selectedHistoryDetail;
+    const planId = detail?.latest_image_plan?.plan.id;
+    if (!detail || !planId) {
+      return;
+    }
+
+    dispatch({ type: 'image_action_started' });
+
+    try {
+      const result = await createImageJob(planId, {
+        scope,
+        planPageId: planPageId ?? null,
+      });
+      const snapshot = await fetchImageJobSnapshot(result.job.id);
+      dispatch({
+        type: 'image_job_snapshot_loaded',
+        taskId: detail.task.id,
+        snapshot,
+      });
+    } catch (error) {
+      dispatch({ type: 'image_failed', message: getErrorMessage(error) });
+    }
+  }
+
+  async function handleSelectImageAsset(assetId: string) {
+    const detail = state.selectedHistoryDetail;
+    if (!detail) {
+      return;
+    }
+
+    dispatch({ type: 'image_action_started' });
+
+    try {
+      const asset = await selectImageAsset(assetId);
+      dispatch({
+        type: 'image_asset_selected',
+        taskId: detail.task.id,
+        asset,
+      });
+    } catch (error) {
+      dispatch({ type: 'image_failed', message: getErrorMessage(error) });
+    }
+  }
+
   return (
     <main className={styles.page}>
       <div className={styles.shell}>
@@ -227,11 +441,16 @@ function CreatePageClient() {
         <CreateComposerForm
           classes={styles as CreateComposerFormClasses}
           form={state.form}
+          imageConfig={state.imageConfig}
+          imageProviders={state.imageProviders}
           isSubmitting={state.isSubmitting}
           error={state.error}
           onSubmit={handleSubmit}
           onFieldChange={(field, value) =>
             dispatch({ type: 'form_changed', field, value })
+          }
+          onImageConfigChange={(field, value) =>
+            dispatch({ type: 'image_config_changed', field, value })
           }
         />
 
@@ -435,6 +654,27 @@ function CreatePageClient() {
             )}
           </section>
         </div>
+
+        <ImageWorkbench
+          classes={styles as ImageWorkbenchClasses}
+          detail={state.selectedHistoryDetail}
+          selectedOutputId={state.selectedHistoryOutputId}
+          imageConfig={state.imageConfig}
+          isLoading={state.isImageLoading}
+          error={state.imageError}
+          onSelectOutputVersion={handleHistoryOutputSelect}
+          onCreatePlan={handleCreateImagePlan}
+          onTogglePage={handleToggleImagePage}
+          onRunFullJob={() => {
+            void runImageJob('full');
+          }}
+          onRunPageJob={(pageId) => {
+            void runImageJob('page', pageId);
+          }}
+          onSelectAsset={(assetId) => {
+            void handleSelectImageAsset(assetId);
+          }}
+        />
 
         <section className={styles.historyGrid}>
           <section className={styles.panel}>

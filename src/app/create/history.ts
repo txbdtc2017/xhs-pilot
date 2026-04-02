@@ -26,9 +26,11 @@ export async function fetchHistoryTasks(
 
 export async function fetchHistoryTaskDetail(
   taskId: string,
+  outputId?: string | null,
   fetchImpl: FetchLike = fetch,
 ): Promise<HistoryTaskDetail> {
-  const response = await fetchImpl(`/api/generate/${encodeURIComponent(taskId)}`);
+  const query = outputId ? `?outputId=${encodeURIComponent(outputId)}` : '';
+  const response = await fetchImpl(`/api/generate/${encodeURIComponent(taskId)}${query}`);
 
   if (!response.ok) {
     throw new Error('Failed to load generation task detail');

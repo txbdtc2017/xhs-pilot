@@ -2,6 +2,7 @@ import { query, queryOne } from '@/lib/db';
 import type { GenerationOutput } from '@/agents/generation';
 import type { StrategyResult } from '@/agents/schemas/strategy';
 import type { TaskInput, TaskReferencesSelection } from '@/agents/strategy';
+import { imageGenerationRepository, type ImageGenerationJobRow, type ImagePlanDetail, type OutputVersionSummary } from '@/app/api/image-generation/repository';
 
 export interface TaskRow {
   id: string;
@@ -191,11 +192,18 @@ export async function getTaskHistory({ page, limit }: GetTaskHistoryParams): Pro
   };
 }
 
-export async function getTaskDetail(taskId: string): Promise<{
+export async function getTaskDetail(
+  taskId: string,
+  options?: { selectedOutputId?: string | null },
+): Promise<{
   task: TaskRow;
   strategy: Record<string, unknown> | null;
   references: Array<Record<string, unknown>>;
+  output_versions: OutputVersionSummary[];
+  selected_output_id: string | null;
   outputs: Record<string, unknown> | null;
+  latest_image_plan: ImagePlanDetail | null;
+  active_image_job: ImageGenerationJobRow | null;
   reference_mode: string | null;
   feedback: Record<string, unknown> | null;
 } | null> {
@@ -256,27 +264,42 @@ export async function getTaskDetail(taskId: string): Promise<{
     [taskId],
   );
 
-  const outputs = await queryOne<Record<string, unknown>>(
-    `
-      SELECT
-        titles,
-        openings,
-        body_versions,
-        cta_versions,
-        cover_copies,
-        hashtags,
-        first_comment,
-        image_suggestions,
-        model_name,
-        version,
-        created_at
-      FROM generation_outputs
-      WHERE task_id = $1
-      ORDER BY version DESC, created_at DESC
-      LIMIT 1
-    `,
-    [taskId],
-  );
+  const outputVersions = await imageGenerationRepository.listOutputVersions(taskId);
+  const selectedOutputId = outputVersions.some((output) => output.id === options?.selectedOutputId)
+    ? options?.selectedOutputId ?? null
+    : outputVersions[0]?.id ?? null;
+
+  const outputs = selectedOutputId
+    ? await queryOne<Record<string, unknown>>(
+      `
+        SELECT
+          id,
+          task_id,
+          titles,
+          openings,
+          body_versions,
+          cta_versions,
+          cover_copies,
+          hashtags,
+          first_comment,
+          image_suggestions,
+          model_name,
+          version,
+          created_at
+        FROM generation_outputs
+        WHERE id = $1
+      `,
+      [selectedOutputId],
+    )
+    : null;
+
+  const latestImagePlan = selectedOutputId
+    ? await imageGenerationRepository.getLatestImagePlanForOutput(selectedOutputId)
+    : null;
+
+  const activeImageJob = latestImagePlan
+    ? await imageGenerationRepository.getActiveImageJob(latestImagePlan.plan.id)
+    : null;
 
   const feedback = await queryOne<Record<string, unknown>>(
     `
@@ -299,7 +322,11 @@ export async function getTaskDetail(taskId: string): Promise<{
     task,
     strategy,
     references,
+    output_versions: outputVersions,
+    selected_output_id: selectedOutputId,
     outputs,
+    latest_image_plan: latestImagePlan,
+    active_image_job: activeImageJob,
     reference_mode: task.reference_mode,
     feedback,
   };

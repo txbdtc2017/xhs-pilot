@@ -16,12 +16,15 @@ export function createGenerateTaskDetailGetHandler(
   dependencies: GenerateTaskDetailDependencies = createDefaultGenerateTaskDetailDependencies(),
 ) {
   return async function GET(
-    _request: Request,
+    request: Request,
     { params }: { params: Promise<{ taskId: string }> },
   ) {
     try {
       const { taskId } = await params;
-      const detail = await dependencies.getTaskDetail(taskId);
+      const outputId = new URL(request.url).searchParams.get('outputId');
+      const detail = await dependencies.getTaskDetail(taskId, {
+        selectedOutputId: outputId?.trim() || null,
+      });
 
       if (!detail) {
         return NextResponse.json({ error: 'Task not found' }, { status: 404 });

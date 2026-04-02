@@ -9,6 +9,11 @@ import {
 
 function createGenerationComplete() {
   return {
+    id: 'output-1',
+    task_id: 'task-1',
+    version: 1,
+    model_name: 'gpt-4o',
+    created_at: '2026-03-31T00:00:00.000Z',
     titles: ['标题一'],
     openings: ['开头一'],
     body_versions: ['正文一'],
@@ -17,6 +22,103 @@ function createGenerationComplete() {
     hashtags: ['#标签一'],
     first_comment: '首评一',
     image_suggestions: '配图建议',
+  };
+}
+
+function createHistoryDetail() {
+  return {
+    task: {
+      id: 'task-1',
+      topic: '历史任务一',
+      status: 'completed',
+      reference_mode: 'referenced',
+    },
+    strategy: {
+      strategy_summary: '策略摘要',
+      title_strategy: '结果先行',
+    },
+    references: [
+      {
+        sample_id: 'sample-1',
+        title: '参考样本',
+        reference_type: 'title',
+        reason: '标题节奏',
+      },
+    ],
+    output_versions: [
+      {
+        id: 'output-1',
+        version: 1,
+        model_name: 'gpt-4o',
+        created_at: '2026-03-31T00:00:00.000Z',
+      },
+      {
+        id: 'output-2',
+        version: 2,
+        model_name: 'gpt-4.1',
+        created_at: '2026-03-31T01:00:00.000Z',
+      },
+    ],
+    selected_output_id: 'output-2',
+    outputs: {
+      ...createGenerationComplete(),
+      id: 'output-2',
+      version: 2,
+      model_name: 'gpt-4.1',
+    },
+    latest_image_plan: {
+      plan: {
+        id: 'plan-1',
+        output_id: 'output-2',
+        status: 'ready',
+        provider: 'google_vertex',
+        provider_model: 'gemini-3-pro-image-preview',
+      },
+      pages: [
+        {
+          id: 'page-1',
+          plan_id: 'plan-1',
+          sort_order: 0,
+          page_role: 'cover',
+          is_enabled: true,
+          content_purpose: '封面结论页',
+          source_excerpt: '封面主标题',
+          visual_type: 'info-card',
+          style_reason: '高对比大字',
+          prompt_summary: '高对比',
+          prompt_text: 'prompt',
+          candidate_count: 2,
+        },
+      ],
+      assets: [
+        {
+          id: 'asset-1',
+          plan_page_id: 'page-1',
+          image_url: '/uploads/asset-1.png',
+          candidate_index: 0,
+          is_selected: true,
+        },
+        {
+          id: 'asset-2',
+          plan_page_id: 'page-1',
+          image_url: '/uploads/asset-2.png',
+          candidate_index: 1,
+          is_selected: false,
+        },
+      ],
+      selected_assets: [
+        {
+          id: 'asset-1',
+          plan_page_id: 'page-1',
+          image_url: '/uploads/asset-1.png',
+          candidate_index: 0,
+          is_selected: true,
+        },
+      ],
+    },
+    active_image_job: null,
+    reference_mode: 'referenced',
+    feedback: null,
   };
 }
 
@@ -137,29 +239,7 @@ test('createPageReducer stores history list and selected task detail without cle
   state = createPageReducer(state, {
     type: 'history_detail_loaded',
     taskId: 'task-1',
-    detail: {
-      task: {
-        id: 'task-1',
-        topic: '历史任务一',
-        status: 'completed',
-        reference_mode: 'referenced',
-      },
-      strategy: {
-        strategy_summary: '策略摘要',
-        title_strategy: '结果先行',
-      },
-      references: [
-        {
-          sample_id: 'sample-1',
-          title: '参考样本',
-          reference_type: 'title',
-          reason: '标题节奏',
-        },
-      ],
-      outputs: createGenerationComplete(),
-      reference_mode: 'referenced',
-      feedback: null,
-    },
+    detail: createHistoryDetail(),
   });
 
   assert.equal(state.form.topic, '保留当前主题');
@@ -186,19 +266,7 @@ test('submit_started preserves loaded history data while resetting the live gene
   state = createPageReducer(state, {
     type: 'history_detail_loaded',
     taskId: 'task-1',
-    detail: {
-      task: {
-        id: 'task-1',
-        topic: '历史任务一',
-        status: 'completed',
-        reference_mode: 'referenced',
-      },
-      strategy: { strategy_summary: '策略摘要' },
-      references: [],
-      outputs: createGenerationComplete(),
-      reference_mode: 'referenced',
-      feedback: null,
-    },
+    detail: createHistoryDetail(),
   });
   state = createPageReducer(state, { type: 'submit_started' });
 
@@ -208,4 +276,117 @@ test('submit_started preserves loaded history data while resetting the live gene
   assert.equal(state.historyTasks.length, 1);
   assert.equal(state.selectedHistoryTaskId, 'task-1');
   assert.equal(state.selectedHistoryDetail?.task.topic, '历史任务一');
+});
+
+test('history_detail_loaded tracks the currently selected output version for history switching', () => {
+  const state = createPageReducer(createInitialCreateState(), {
+    type: 'history_detail_loaded',
+    taskId: 'task-1',
+    outputId: 'output-2',
+    detail: createHistoryDetail(),
+  });
+
+  assert.equal(state.selectedHistoryTaskId, 'task-1');
+  assert.equal(state.selectedHistoryOutputId, 'output-2');
+  assert.equal(state.selectedHistoryDetail?.selected_output_id, 'output-2');
+});
+
+test('image_job_snapshot_loaded refreshes active job progress and merges plan assets', () => {
+  let state = createPageReducer(createInitialCreateState(), {
+    type: 'history_detail_loaded',
+    taskId: 'task-1',
+    detail: createHistoryDetail(),
+  });
+
+  state = createPageReducer(state, {
+    type: 'image_job_snapshot_loaded',
+    taskId: 'task-1',
+    snapshot: {
+      job: {
+        id: 'job-1',
+        plan_id: 'plan-1',
+        scope: 'full',
+        plan_page_id: null,
+        provider: 'google_vertex',
+        status: 'running',
+        total_units: 3,
+        completed_units: 2,
+        error_message: null,
+        model_name: 'gpt-image-1',
+        created_at: '2026-03-31T00:00:00.000Z',
+        started_at: '2026-03-31T00:00:01.000Z',
+        finished_at: null,
+      },
+      plan: {
+        id: 'plan-1',
+        output_id: 'output-2',
+        status: 'ready',
+        provider: 'google_vertex',
+        provider_model: 'gemini-3-pro-image-preview',
+      },
+      pages: [
+        {
+          id: 'page-1',
+          sort_order: 0,
+          page_role: 'cover',
+          is_enabled: true,
+          candidate_count: 2,
+        },
+      ],
+      assets: [
+        {
+          id: 'asset-1',
+          plan_page_id: 'page-1',
+          image_url: '/uploads/asset-1.png',
+          candidate_index: 0,
+          is_selected: false,
+        },
+        {
+          id: 'asset-2',
+          plan_page_id: 'page-1',
+          image_url: '/uploads/asset-2.png',
+          candidate_index: 1,
+          is_selected: true,
+        },
+      ],
+      selected_assets: [
+        {
+          id: 'asset-2',
+          plan_page_id: 'page-1',
+          image_url: '/uploads/asset-2.png',
+          candidate_index: 1,
+          is_selected: true,
+        },
+      ],
+    },
+  });
+
+  assert.equal(state.selectedHistoryDetail?.active_image_job?.completed_units, 2);
+  assert.equal(state.selectedHistoryDetail?.latest_image_plan?.selected_assets[0]?.id, 'asset-2');
+});
+
+test('image_asset_selected flips the selected flag within the current plan assets', () => {
+  let state = createPageReducer(createInitialCreateState(), {
+    type: 'history_detail_loaded',
+    taskId: 'task-1',
+    detail: createHistoryDetail(),
+  });
+
+  state = createPageReducer(state, {
+    type: 'image_asset_selected',
+    taskId: 'task-1',
+    asset: {
+      id: 'asset-2',
+      plan_page_id: 'page-1',
+      image_url: '/uploads/asset-2.png',
+      candidate_index: 1,
+      is_selected: true,
+    },
+  });
+
+  assert.equal(state.selectedHistoryDetail?.latest_image_plan?.selected_assets[0]?.id, 'asset-2');
+  assert.equal(
+    state.selectedHistoryDetail?.latest_image_plan?.assets.find((asset) => asset.id === 'asset-1')?.is_selected,
+    false,
+  );
 });

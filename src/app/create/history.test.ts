@@ -33,13 +33,17 @@ test('fetchHistoryTasks loads recent generation tasks from the existing history 
 });
 
 test('fetchHistoryTaskDetail loads the selected task detail from the existing detail endpoint', async () => {
-  const detail = await fetchHistoryTaskDetail('task-1', async (input) => {
+  const detail = await fetchHistoryTaskDetail('task-1', null, async (input) => {
     assert.equal(input, '/api/generate/task-1');
     return new Response(JSON.stringify({
       task: { id: 'task-1', topic: '历史任务一', status: 'completed' },
       strategy: { strategy_summary: '策略摘要' },
       references: [{ sample_id: 'sample-1', title: '参考样本' }],
+      output_versions: [],
+      selected_output_id: null,
       outputs: null,
+      latest_image_plan: null,
+      active_image_job: null,
       reference_mode: 'referenced',
       feedback: null,
     }), {
@@ -50,6 +54,27 @@ test('fetchHistoryTaskDetail loads the selected task detail from the existing de
 
   assert.equal(detail.task.id, 'task-1');
   assert.equal(detail.references[0]?.title, '参考样本');
+});
+
+test('fetchHistoryTaskDetail forwards the selected output id when switching history versions', async () => {
+  await fetchHistoryTaskDetail('task-1', 'output-2', async (input) => {
+    assert.equal(input, '/api/generate/task-1?outputId=output-2');
+    return new Response(JSON.stringify({
+      task: { id: 'task-1', topic: '历史任务一', status: 'completed' },
+      strategy: null,
+      references: [],
+      output_versions: [],
+      selected_output_id: 'output-2',
+      outputs: null,
+      latest_image_plan: null,
+      active_image_job: null,
+      reference_mode: 'referenced',
+      feedback: null,
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
 });
 
 test('normalizeHistoryTaskId and buildHistoryTaskHref support deep-linking into /create', () => {

@@ -49,6 +49,11 @@ export interface StrategySnapshotPayload {
 }
 
 export interface GenerationCompletePayload {
+  id?: string;
+  task_id?: string;
+  version?: number;
+  model_name?: string | null;
+  created_at?: string;
   titles: string[];
   openings: string[];
   body_versions: string[];
@@ -57,6 +62,105 @@ export interface GenerationCompletePayload {
   hashtags: string[];
   first_comment: string;
   image_suggestions: string;
+}
+
+export type ImageProvider = 'openai' | 'google_vertex';
+
+export interface ImageProviderPayload {
+  provider: ImageProvider;
+  label: string;
+  available: boolean;
+  model: string;
+  code?: string;
+  message?: string;
+}
+
+export interface ImageConfigValues {
+  provider: ImageProvider;
+  visualDirectionOverride: string;
+  bodyPageCap: number;
+  coverCandidateCount: number;
+  bodyCandidateCount: number;
+}
+
+export interface OutputVersionPayload {
+  id: string;
+  version: number;
+  model_name: string | null;
+  created_at: string;
+}
+
+export interface ImagePlanPagePayload {
+  id: string;
+  plan_id: string;
+  sort_order: number;
+  page_role: string;
+  is_enabled: boolean;
+  content_purpose: string;
+  source_excerpt: string;
+  visual_type: string;
+  style_reason: string;
+  prompt_summary: string;
+  prompt_text: string;
+  candidate_count: number;
+}
+
+export interface ImageAssetPayload {
+  id: string;
+  plan_page_id: string;
+  image_url: string | null;
+  candidate_index: number;
+  is_selected: boolean;
+}
+
+export interface ImagePlanPayload {
+  plan: {
+    id: string;
+    output_id: string;
+    status: string;
+    provider: ImageProvider;
+    provider_model: string;
+    visual_direction_override?: string | null;
+    body_page_cap?: number;
+    cover_candidate_count?: number;
+    body_candidate_count?: number;
+    system_decision_summary?: string;
+    created_at?: string;
+    superseded_at?: string | null;
+  };
+  pages: ImagePlanPagePayload[];
+  assets: ImageAssetPayload[];
+  selected_assets: ImageAssetPayload[];
+}
+
+export interface ImageJobPayload {
+  id: string;
+  plan_id: string;
+  scope: 'full' | 'page';
+  plan_page_id: string | null;
+  provider: ImageProvider;
+  status: string;
+  total_units: number;
+  completed_units: number;
+  error_message: string | null;
+  model_name: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface ImageJobSnapshotPayload {
+  job: ImageJobPayload;
+  plan: {
+    id: string;
+    output_id: string;
+    status: string;
+    provider: ImageProvider;
+    provider_model: string;
+  };
+  pages: Array<Pick<ImagePlanPagePayload, 'id' | 'sort_order' | 'page_role' | 'is_enabled' | 'candidate_count'>>;
+  assets: ImageAssetPayload[];
+  selected_assets: ImageAssetPayload[];
 }
 
 export interface HistoryTaskSummary {
@@ -77,13 +181,20 @@ export interface HistoryTaskDetail {
   };
   strategy: Record<string, unknown> | null;
   references: Array<Record<string, unknown>>;
+  output_versions: OutputVersionPayload[];
+  selected_output_id: string | null;
   outputs: GenerationCompletePayload | null;
+  latest_image_plan: ImagePlanPayload | null;
+  active_image_job: ImageJobPayload | null;
   reference_mode: string | null;
   feedback: Record<string, unknown> | null;
 }
 
 export interface CreatePageState {
   form: CreateFormValues;
+  imageConfig: ImageConfigValues;
+  imageProviders: ImageProviderPayload[];
+  defaultImageProvider: ImageProvider | null;
   isSubmitting: boolean;
   error: string | null;
   step: 'idle' | 'understanding' | 'searching' | 'strategizing' | 'generating' | 'completed' | 'failed';
@@ -97,7 +208,10 @@ export interface CreatePageState {
   isHistoryLoading: boolean;
   historyError: string | null;
   selectedHistoryTaskId: string | null;
+  selectedHistoryOutputId: string | null;
   selectedHistoryDetail: HistoryTaskDetail | null;
+  isImageLoading: boolean;
+  imageError: string | null;
 }
 
 export type CreateStreamEvent =
@@ -111,13 +225,20 @@ export type CreateStreamEvent =
 
 export type CreatePageAction =
   | { type: 'form_changed'; field: keyof CreateFormValues; value: string | boolean }
+  | { type: 'image_config_changed'; field: keyof ImageConfigValues; value: string | number }
+  | { type: 'image_providers_loaded'; providers: ImageProviderPayload[]; defaultProvider: ImageProvider | null }
   | { type: 'submit_started' }
   | { type: 'submit_failed'; message: string }
   | { type: 'stream_event'; event: CreateStreamEvent['event']; data: CreateStreamEvent['data'] }
   | { type: 'history_list_requested' }
   | { type: 'history_list_loaded'; tasks: HistoryTaskSummary[] }
-  | { type: 'history_detail_requested'; taskId: string }
-  | { type: 'history_detail_loaded'; taskId: string; detail: HistoryTaskDetail }
+  | { type: 'history_detail_requested'; taskId: string; outputId?: string | null }
+  | { type: 'history_detail_loaded'; taskId: string; outputId?: string | null; detail: HistoryTaskDetail }
+  | { type: 'image_action_started' }
+  | { type: 'image_plan_loaded'; taskId: string; outputId: string; plan: ImagePlanPayload }
+  | { type: 'image_job_snapshot_loaded'; taskId: string; snapshot: ImageJobSnapshotPayload }
+  | { type: 'image_asset_selected'; taskId: string; asset: ImageAssetPayload }
+  | { type: 'image_failed'; message: string }
   | { type: 'history_failed'; message: string };
 
 export function createInitialCreateState(): CreatePageState {
@@ -130,6 +251,15 @@ export function createInitialCreateState(): CreatePageState {
       personaMode: 'balanced',
       needCoverSuggestion: true,
     },
+    imageConfig: {
+      provider: 'openai',
+      visualDirectionOverride: '',
+      bodyPageCap: 4,
+      coverCandidateCount: 2,
+      bodyCandidateCount: 1,
+    },
+    imageProviders: [],
+    defaultImageProvider: null,
     isSubmitting: false,
     error: null,
     step: 'idle',
@@ -143,7 +273,45 @@ export function createInitialCreateState(): CreatePageState {
     isHistoryLoading: false,
     historyError: null,
     selectedHistoryTaskId: null,
+    selectedHistoryOutputId: null,
     selectedHistoryDetail: null,
+    isImageLoading: false,
+    imageError: null,
+  };
+}
+
+function mergeImageAssets(
+  assets: ImageAssetPayload[],
+  selectedAsset: ImageAssetPayload,
+): { assets: ImageAssetPayload[]; selected_assets: ImageAssetPayload[] } {
+  const nextAssets = assets.map((asset) => asset.plan_page_id === selectedAsset.plan_page_id
+    ? { ...asset, is_selected: asset.id === selectedAsset.id }
+    : asset);
+
+  return {
+    assets: nextAssets,
+    selected_assets: nextAssets.filter((asset) => asset.is_selected),
+  };
+}
+
+function mergeImageJobSnapshot(
+  detail: HistoryTaskDetail,
+  snapshot: ImageJobSnapshotPayload,
+): HistoryTaskDetail {
+  const latestImagePlan = detail.latest_image_plan && detail.latest_image_plan.plan.id === snapshot.plan.id
+    ? {
+      ...detail.latest_image_plan,
+      assets: snapshot.assets,
+      selected_assets: snapshot.selected_assets,
+    }
+    : detail.latest_image_plan;
+
+  return {
+    ...detail,
+    latest_image_plan: latestImagePlan,
+    active_image_job: ['queued', 'running'].includes(snapshot.job.status)
+      ? snapshot.job
+      : null,
   };
 }
 
@@ -216,6 +384,29 @@ export function createPageReducer(
           [action.field]: action.value,
         },
       };
+    case 'image_config_changed':
+      return {
+        ...state,
+        imageConfig: {
+          ...state.imageConfig,
+          [action.field]: action.value,
+        },
+      };
+    case 'image_providers_loaded': {
+      const nextProvider = state.selectedHistoryDetail?.latest_image_plan?.plan.provider
+        ?? action.defaultProvider
+        ?? state.imageConfig.provider;
+
+      return {
+        ...state,
+        imageProviders: action.providers,
+        defaultImageProvider: action.defaultProvider,
+        imageConfig: {
+          ...state.imageConfig,
+          provider: nextProvider,
+        },
+      };
+    }
     case 'submit_started':
       return {
         ...state,
@@ -253,6 +444,9 @@ export function createPageReducer(
       return {
         ...state,
         selectedHistoryTaskId: action.taskId,
+        selectedHistoryOutputId: action.taskId === state.selectedHistoryTaskId
+          ? action.outputId ?? state.selectedHistoryOutputId
+          : action.outputId ?? null,
         isHistoryLoading: true,
         historyError: null,
       };
@@ -260,9 +454,73 @@ export function createPageReducer(
       return {
         ...state,
         selectedHistoryTaskId: action.taskId,
+        selectedHistoryOutputId: action.outputId ?? action.detail.selected_output_id,
         selectedHistoryDetail: action.detail,
+        imageConfig: {
+          ...state.imageConfig,
+          provider: action.detail.latest_image_plan?.plan.provider ?? state.defaultImageProvider ?? state.imageConfig.provider,
+        },
         isHistoryLoading: false,
         historyError: null,
+      };
+    case 'image_action_started':
+      return {
+        ...state,
+        isImageLoading: true,
+        imageError: null,
+      };
+    case 'image_plan_loaded':
+      return {
+        ...state,
+        isImageLoading: false,
+        imageError: null,
+        selectedHistoryOutputId: action.outputId,
+        selectedHistoryDetail: state.selectedHistoryDetail?.task.id === action.taskId
+          ? {
+            ...state.selectedHistoryDetail,
+            selected_output_id: action.outputId,
+            latest_image_plan: action.plan,
+            active_image_job: null,
+          }
+          : state.selectedHistoryDetail,
+        imageConfig: {
+          ...state.imageConfig,
+          provider: action.plan.plan.provider,
+        },
+      };
+    case 'image_job_snapshot_loaded':
+      return {
+        ...state,
+        isImageLoading: false,
+        imageError: null,
+        selectedHistoryDetail: state.selectedHistoryDetail?.task.id === action.taskId
+          ? mergeImageJobSnapshot(state.selectedHistoryDetail, action.snapshot)
+          : state.selectedHistoryDetail,
+      };
+    case 'image_asset_selected':
+      return {
+        ...state,
+        isImageLoading: false,
+        imageError: null,
+        selectedHistoryDetail: state.selectedHistoryDetail?.task.id === action.taskId &&
+          state.selectedHistoryDetail.latest_image_plan
+          ? {
+            ...state.selectedHistoryDetail,
+            latest_image_plan: {
+              ...state.selectedHistoryDetail.latest_image_plan,
+              ...mergeImageAssets(
+                state.selectedHistoryDetail.latest_image_plan.assets,
+                action.asset,
+              ),
+            },
+          }
+          : state.selectedHistoryDetail,
+      };
+    case 'image_failed':
+      return {
+        ...state,
+        isImageLoading: false,
+        imageError: action.message,
       };
     case 'history_failed':
       return {

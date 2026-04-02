@@ -3,9 +3,10 @@ import { backfillMissingEmbeddings } from '@/lib/embedding-backfill';
 import { logger } from '@/lib/logger';
 import { redis } from '@/lib/redis';
 import { resolveSearchModeStatus } from '@/lib/search-mode';
-import { embedQueue } from '@/queues';
+import { getEmbedQueue } from '@/queues';
 
 async function main(): Promise<void> {
+  const embedQueue = getEmbedQueue();
   const result = await backfillMissingEmbeddings({
     query,
     enqueueEmbeddingJob: async (sampleId) => embedQueue.add('embed', { sampleId }),
@@ -21,6 +22,7 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
+    const embedQueue = getEmbedQueue();
     await embedQueue.close();
     await pool.end();
 

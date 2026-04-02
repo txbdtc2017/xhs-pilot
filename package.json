@@ -19,6 +19,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.63",
     "@ai-sdk/openai": "^3.0.47",
+    "@google/genai": "^1.47.0",
     "ai": "^6.0.134",
     "bullmq": "^5.71.0",
     "ioredis": "^5.10.1",

@@ -221,6 +221,65 @@ test('createProviderFactories preserves the existing openai-compatible path for 
   assert.equal(embeddingModel.provider, 'openai.embedding');
 });
 
+test('resolveProviderOptions keeps image generation provider isolated from llm and vision fallbacks', () => {
+  const resolved = resolveProviderOptions({
+    LLM_API_KEY: 'main-key',
+    LLM_BASE_URL: 'https://llm.example/v1',
+    VISION_API_KEY: 'vision-key',
+    VISION_BASE_URL: 'https://vision.example/v1',
+    IMAGE_PROTOCOL: 'openai',
+    IMAGE_API_KEY: 'image-key',
+    IMAGE_BASE_URL: 'https://image.example/v1',
+  });
+
+  assert.deepEqual(resolved.image, {
+    protocol: 'openai',
+    apiKey: 'image-key',
+    baseURL: 'https://image.example/v1',
+  });
+});
+
+test('resolveProviderOptions does not implicitly populate image generation provider from llm settings', () => {
+  const resolved = resolveProviderOptions({
+    LLM_API_KEY: 'main-key',
+    LLM_BASE_URL: 'https://llm.example/v1',
+  });
+
+  assert.deepEqual(resolved.image, {
+    protocol: 'openai',
+    apiKey: undefined,
+    baseURL: undefined,
+  });
+});
+
+test('resolveProviderOptions rejects unsupported image protocols', () => {
+  assert.throws(
+    () => resolveProviderOptions({
+      LLM_API_KEY: 'main-key',
+      LLM_BASE_URL: 'https://llm.example/v1',
+      IMAGE_PROTOCOL: 'anthropic-messages',
+      IMAGE_API_KEY: 'image-key',
+      IMAGE_BASE_URL: 'https://image.example/v1',
+    }),
+    /IMAGE_PROTOCOL must be "openai"/,
+  );
+});
+
+test('createProviderFactories exposes an openai image model factory when IMAGE_* is configured', () => {
+  const providers = createProviderFactories({
+    LLM_API_KEY: 'openai-key',
+    LLM_BASE_URL: 'https://llm.example/v1',
+    IMAGE_PROTOCOL: 'openai',
+    IMAGE_API_KEY: 'image-key',
+    IMAGE_BASE_URL: 'https://image.example/v1',
+  });
+
+  const imageModel = providers.llmImage.imageModel('gpt-image-1');
+
+  assert.equal(imageModel.provider, 'openai.image');
+   assert.equal(imageModel.modelId, 'gpt-image-1');
+});
+
 test('createProviderFactories raises a clear error when a language-model API key is missing', () => {
   const providers = createProviderFactories({
     LLM_PROTOCOL: 'anthropic-messages',

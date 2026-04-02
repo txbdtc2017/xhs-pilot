@@ -109,8 +109,8 @@ function createDefaultSamplesPostDependencies(): SamplesPostDependencies {
     queryOne,
     listSamples,
     addAnalyzeJob: async (sampleId) => {
-      const { analyzeQueue } = await import('@/queues');
-      await analyzeQueue.add('analyze', { sampleId });
+      const { getAnalyzeQueue } = await import('@/queues');
+      await getAnalyzeQueue().add('analyze', { sampleId });
     },
   };
 }

@@ -2,7 +2,7 @@
 
 import type { ChangeEvent, FormEvent } from 'react';
 
-import type { CreateFormValues } from './state';
+import type { CreateFormValues, ImageConfigValues, ImageProviderPayload } from './state';
 
 export type CreateComposerFormClassName =
   | 'panel'
@@ -35,19 +35,25 @@ export type CreateComposerFormClasses = Record<CreateComposerFormClassName, stri
 interface CreateComposerFormProps {
   classes: CreateComposerFormClasses;
   form: CreateFormValues;
+  imageConfig: ImageConfigValues;
+  imageProviders: ImageProviderPayload[];
   isSubmitting: boolean;
   error: string | null;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onFieldChange: <K extends keyof CreateFormValues>(field: K, value: CreateFormValues[K]) => void;
+  onImageConfigChange: <K extends keyof ImageConfigValues>(field: K, value: ImageConfigValues[K]) => void;
 }
 
 export function CreateComposerForm({
   classes,
   form,
+  imageConfig,
+  imageProviders,
   isSubmitting,
   error,
   onSubmit,
   onFieldChange,
+  onImageConfigChange,
 }: CreateComposerFormProps) {
   function handleTextChange<K extends Extract<keyof CreateFormValues, 'topic' | 'targetAudience' | 'goal' | 'stylePreference' | 'personaMode'>>(
     field: K,
@@ -55,6 +61,14 @@ export function CreateComposerForm({
     return (
       event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
     ) => onFieldChange(field, event.target.value as CreateFormValues[K]);
+  }
+
+  function handleNumberChange<K extends Extract<keyof ImageConfigValues, 'bodyPageCap' | 'coverCandidateCount' | 'bodyCandidateCount'>>(
+    field: K,
+  ) {
+    return (event: ChangeEvent<HTMLInputElement>) => {
+      onImageConfigChange(field, Number(event.target.value) as ImageConfigValues[K]);
+    };
   }
 
   return (
@@ -110,6 +124,35 @@ export function CreateComposerForm({
             </label>
 
             <label className={classes.field}>
+              <span className={classes.fieldLabel}>图片提供方</span>
+              <select
+                className={classes.select}
+                value={imageConfig.provider}
+                onChange={(event) => onImageConfigChange('provider', event.target.value as ImageConfigValues['provider'])}
+              >
+                {imageProviders.map((provider) => (
+                  <option
+                    key={provider.provider}
+                    value={provider.provider}
+                    disabled={!provider.available}
+                  >
+                    {provider.label}{provider.available ? '' : '（未配置）'}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className={classes.field}>
+              <span className={classes.fieldLabel}>图片视觉方向</span>
+              <input
+                className={classes.input}
+                value={imageConfig.visualDirectionOverride}
+                onChange={(event) => onImageConfigChange('visualDirectionOverride', event.target.value)}
+                placeholder="例如：档案感结论大字 / 杂志感留白"
+              />
+            </label>
+
+            <label className={classes.field}>
               <span className={classes.fieldLabel}>Persona Mode</span>
               <select
                 className={classes.select}
@@ -120,6 +163,42 @@ export function CreateComposerForm({
                 <option value="self">self</option>
                 <option value="strong_style">strong_style</option>
               </select>
+            </label>
+
+            <label className={classes.field}>
+              <span className={classes.fieldLabel}>正文页上限</span>
+              <input
+                className={classes.input}
+                type="number"
+                min={1}
+                max={8}
+                value={imageConfig.bodyPageCap}
+                onChange={handleNumberChange('bodyPageCap')}
+              />
+            </label>
+
+            <label className={classes.field}>
+              <span className={classes.fieldLabel}>封面候选数</span>
+              <input
+                className={classes.input}
+                type="number"
+                min={1}
+                max={4}
+                value={imageConfig.coverCandidateCount}
+                onChange={handleNumberChange('coverCandidateCount')}
+              />
+            </label>
+
+            <label className={classes.field}>
+              <span className={classes.fieldLabel}>正文候选数</span>
+              <input
+                className={classes.input}
+                type="number"
+                min={1}
+                max={3}
+                value={imageConfig.bodyCandidateCount}
+                onChange={handleNumberChange('bodyCandidateCount')}
+              />
             </label>
           </div>
 

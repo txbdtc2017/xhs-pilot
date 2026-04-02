@@ -2,13 +2,15 @@ import { Worker } from 'bullmq';
 import { pathToFileURL } from 'node:url';
 import { embedMany } from 'ai';
 import { analyzeText, analyzeImage } from './agents/analysis';
+import { generatePlannedImages } from './agents/image-generation';
+import { imageGenerationRepository } from './app/api/image-generation/repository';
 import { query, queryOne } from './lib/db';
 import { llmEmbedding } from './lib/llm';
 import { logger } from './lib/logger';
 import { redisConnection } from './lib/redis';
 import { DEFAULT_EMBEDDING_MODEL, resolveSearchModeStatus } from './lib/search-mode';
 import { storage } from './lib/storage';
-import { embedQueue } from './queues';
+import { getEmbedQueue } from './queues';
 import {
   processAnalyzeJob,
   processEmbedJob,
@@ -16,6 +18,7 @@ import {
   type AnalyzeJobLike,
   type EmbedJobDependencies,
 } from './worker-jobs';
+import { processImageGenerateJob, type ImageGenerateJobDependencies, type ImageGenerateJobLike } from './worker-image-jobs';
 
 function createAnalyzeJobDependencies(): AnalyzeJobDependencies {
   return {
@@ -24,7 +27,7 @@ function createAnalyzeJobDependencies(): AnalyzeJobDependencies {
     analyzeText,
     analyzeImage,
     storage,
-    embedQueue,
+    embedQueue: getEmbedQueue(),
     logger,
   };
 }
@@ -53,15 +56,31 @@ function createEmbedJobDependencies(): EmbedJobDependencies {
   };
 }
 
+function createImageGenerateJobDependencies(): ImageGenerateJobDependencies {
+  return {
+    getImageJobSnapshot: imageGenerationRepository.getImageJobSnapshot,
+    getPlanExecutionPages: imageGenerationRepository.getPlanExecutionPages,
+    updateImageJob: imageGenerationRepository.updateImageJob,
+    appendImageJobEvent: imageGenerationRepository.appendImageJobEvent,
+    createImageAsset: imageGenerationRepository.createImageAsset,
+    selectImageAsset: imageGenerationRepository.selectImageAsset,
+    generateImages: generatePlannedImages,
+    storage,
+    logger,
+  };
+}
+
 export let analyzeWorker: Worker<{ sampleId: string }> | undefined;
 export let embedWorker: Worker<{ sampleId: string }> | undefined;
+export let imageGenerateWorker: Worker<{ jobId: string }> | undefined;
 
 export function startWorkers(): {
   analyzeWorker: Worker<{ sampleId: string }>;
   embedWorker: Worker<{ sampleId: string }>;
+  imageGenerateWorker: Worker<{ jobId: string }>;
 } {
-  if (analyzeWorker && embedWorker) {
-    return { analyzeWorker, embedWorker };
+  if (analyzeWorker && embedWorker && imageGenerateWorker) {
+    return { analyzeWorker, embedWorker, imageGenerateWorker };
   }
 
   analyzeWorker = new Worker<{ sampleId: string }>(
@@ -92,9 +111,22 @@ export function startWorkers(): {
     { connection: redisConnection },
   );
 
+  imageGenerateWorker = new Worker<{ jobId: string }>(
+    'image-generate',
+    async (job) => {
+      try {
+        await processImageGenerateJob(job as ImageGenerateJobLike, createImageGenerateJobDependencies());
+      } catch (error) {
+        logger.error({ error, job: job.id, imageJobId: job.data.jobId }, 'Image generation job failed');
+        throw error;
+      }
+    },
+    { connection: redisConnection },
+  );
+
   logger.info('Workers started');
 
-  return { analyzeWorker, embedWorker };
+  return { analyzeWorker, embedWorker, imageGenerateWorker };
 }
 
 function isExecutedDirectly(): boolean {
