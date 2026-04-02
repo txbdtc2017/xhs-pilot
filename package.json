@@ -1,6 +1,6 @@
 {
   "name": "xhs-pilot",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "scripts": {
     "dev": "node --import tsx scripts/run-next.ts dev",
