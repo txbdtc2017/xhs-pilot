@@ -140,6 +140,8 @@ XHS Pilot 当前的配置边界比较明确：
 
 更完整的配置注释、provider 示例和运行时说明请直接查看 [`.env.example`](.env.example)。
 
+如果升级后 `.env.example` 新增了键，可以执行 `npm run env:sync`，把本地 `.env` 缺失的配置自动补齐进去；这个命令只追加缺失项，不会覆盖你现有的本地值。
+
 ## 项目边界
 
 ### 当前官方支持

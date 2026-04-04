@@ -13,6 +13,7 @@
     "worker:start": "sh scripts/with-env.sh tsx src/worker.ts",
     "db:migrate": "sh scripts/with-env.sh node-pg-migrate up",
     "db:migrate:down": "sh scripts/with-env.sh node-pg-migrate down",
+    "env:sync": "node --import tsx scripts/sync-env.ts",
     "embeddings:backfill": "sh scripts/with-env.sh tsx scripts/backfill-embeddings.ts",
     "seed": "sh scripts/with-env.sh sh scripts/seed.sh"
   },
