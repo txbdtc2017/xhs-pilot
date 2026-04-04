@@ -1,6 +1,7 @@
 import type { JSONSchema7 } from 'json-schema';
 
 export type StrategyContentDirection = '干货' | '情绪' | '故事' | '观点' | '教程' | '测评';
+const STRATEGY_CONTENT_DIRECTIONS: StrategyContentDirection[] = ['干货', '情绪', '故事', '观点', '教程', '测评'];
 
 export interface StrategyResult {
   content_direction: StrategyContentDirection;
@@ -54,3 +55,44 @@ export const strategySchema: JSONSchema7 = {
   required: ['content_direction', 'title_strategy', 'structure_strategy', 'strategy_summary'],
   additionalProperties: false,
 };
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+export function isStrategyResult(value: unknown): value is StrategyResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  if (
+    typeof record.content_direction !== 'string'
+    || !STRATEGY_CONTENT_DIRECTIONS.includes(record.content_direction as StrategyContentDirection)
+  ) {
+    return false;
+  }
+
+  if (typeof record.title_strategy !== 'string' || typeof record.structure_strategy !== 'string' || typeof record.strategy_summary !== 'string') {
+    return false;
+  }
+
+  if (record.opening_strategy !== undefined && typeof record.opening_strategy !== 'string') {
+    return false;
+  }
+
+  if (record.cover_strategy !== undefined && typeof record.cover_strategy !== 'string') {
+    return false;
+  }
+
+  if (record.cta_strategy !== undefined && typeof record.cta_strategy !== 'string') {
+    return false;
+  }
+
+  if (record.warnings !== undefined && !isStringArray(record.warnings)) {
+    return false;
+  }
+
+  return true;
+}

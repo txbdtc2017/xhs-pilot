@@ -215,6 +215,93 @@ test('applyStreamEvent records errors and leaves the latest content visible', ()
   assert.equal(state.generationText, '已经生成的内容');
 });
 
+test('applyStreamEvent appends readable runtime logs and avoids one row per generation chunk', () => {
+  let state = createPageReducer(createInitialCreateState(), {
+    type: 'submit_started',
+    now: '2026-04-04T10:00:00.000Z',
+  });
+
+  state = applyStreamEvent(state, {
+    event: 'status',
+    data: {
+      step: 'understanding',
+      message: '开始任务理解',
+    },
+  }, '2026-04-04T10:00:01.000Z');
+  state = applyStreamEvent(state, {
+    event: 'task_understanding',
+    data: {
+      task_type: '干货',
+      suitable_structure: '三段式',
+      reference_focus: ['标题', '结构'],
+      notes: '避免空泛表达',
+      search_filters: { track: '职场' },
+      rewritten_query: '职场 收藏',
+      goal: '收藏',
+    },
+  }, '2026-04-04T10:00:02.000Z');
+  state = applyStreamEvent(state, {
+    event: 'strategy_snapshot',
+    data: {
+      content_direction: '干货',
+    },
+  }, '2026-04-04T10:00:03.000Z');
+  state = applyStreamEvent(state, {
+    event: 'generation_delta',
+    data: { text: '第一段' },
+  }, '2026-04-04T10:00:04.000Z');
+  state = applyStreamEvent(state, {
+    event: 'generation_delta',
+    data: { text: '第二段' },
+  }, '2026-04-04T10:00:05.000Z');
+
+  assert.equal(state.lastServerEventAt, '2026-04-04T10:00:05.000Z');
+  assert.equal(state.currentStepStartedAt, '2026-04-04T10:00:04.000Z');
+  assert.deepEqual(
+    state.generationLogs.map((entry) => entry.message),
+    ['开始任务理解', '任务理解完成', '收到首个策略快照', '正文流已开始'],
+  );
+});
+
+test('createPageReducer records unexpected stream closure and keeps the log panel open', () => {
+  let state = createPageReducer(createInitialCreateState(), {
+    type: 'submit_started',
+    now: '2026-04-04T10:00:00.000Z',
+  });
+
+  state = createPageReducer(state, {
+    type: 'stream_closed',
+    now: '2026-04-04T10:00:12.000Z',
+    expectedTerminal: false,
+  });
+
+  assert.equal(state.streamClosedUnexpectedly, true);
+  assert.equal(state.isLogPanelExpanded, true);
+  assert.equal(state.generationLogs.at(-1)?.source, 'system');
+  assert.match(state.generationLogs.at(-1)?.message ?? '', /未收到 done 或 error/);
+});
+
+test('idle_warning_triggered appends only one quiet-period warning per active step', () => {
+  let state = createPageReducer(createInitialCreateState(), {
+    type: 'submit_started',
+    now: '2026-04-04T10:00:00.000Z',
+  });
+
+  state = createPageReducer(state, {
+    type: 'idle_warning_triggered',
+    now: '2026-04-04T10:00:10.000Z',
+  });
+  state = createPageReducer(state, {
+    type: 'idle_warning_triggered',
+    now: '2026-04-04T10:00:15.000Z',
+  });
+
+  assert.equal(
+    state.generationLogs.filter((entry) => entry.event === 'idle_warning').length,
+    1,
+  );
+});
+
 test('createPageReducer stores history list and selected task detail without clearing live form state', () => {
   let state = createInitialCreateState();
   state = createPageReducer(state, {

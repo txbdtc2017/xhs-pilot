@@ -17,8 +17,14 @@ import {
   STRATEGY_SYSTEM_PROMPT,
   TASK_UNDERSTANDING_SYSTEM_PROMPT,
 } from './prompts/strategy';
-import { type StrategyResult, strategySchema } from './schemas/strategy';
 import {
+  createSingleObjectStream,
+  generateStructuredJsonText,
+  shouldUseTextStructuredOutputFallback,
+} from './structured-output';
+import { type StrategyResult, isStrategyResult, strategySchema } from './schemas/strategy';
+import {
+  isTaskUnderstandingResult,
   taskUnderstandingSchema,
   type TaskUnderstandingResult,
 } from './schemas/task-understanding';
@@ -78,6 +84,12 @@ export interface StreamStrategyDependencies {
   streamStrategyObject: (params: {
     system: string;
     prompt: string;
+    input: {
+      taskInput: TaskInput;
+      taskUnderstanding: TaskUnderstandingResult;
+      referenceSelection: TaskReferencesSelection;
+      referenceBlocks: ReferenceContextBlock[];
+    };
   }) => {
     partialObjectStream: AsyncIterable<Record<string, unknown>>;
     object: Promise<Record<string, unknown>>;
@@ -113,11 +125,60 @@ function buildTaskSummaryLines(taskUnderstanding: TaskUnderstandingResult): stri
   ];
 }
 
+function buildCompactStrategyFallbackPrompt(input: {
+  taskInput: TaskInput;
+  taskUnderstanding: TaskUnderstandingResult;
+  referenceSelection: TaskReferencesSelection;
+  referenceBlocks: ReferenceContextBlock[];
+}): string {
+  const compactReferences =
+    input.referenceSelection.reference_mode === 'zero-shot'
+      ? '参考模式：zero-shot，不要编造具体样本。'
+      : [
+          `参考模式：${input.referenceSelection.reference_mode}`,
+          ...input.referenceBlocks.slice(0, 4).map(
+            (block, index) => `参考${index + 1}：${block.reference_type} | ${block.promptBlock.replace(/\n+/g, ' / ')}`,
+          ),
+        ].join('\n');
+
+  return [
+    '请输出紧凑策略 JSON。',
+    `主题：${input.taskInput.topic}`,
+    `目标人群：${input.taskInput.targetAudience ?? '未提供'}`,
+    `目标效果：${input.taskInput.goal ?? '未提供'}`,
+    `风格倾向：${input.taskInput.stylePreference ?? '未提供'}`,
+    `persona_mode：${input.taskInput.personaMode ?? 'balanced'}`,
+    `任务类型：${input.taskUnderstanding.task_type}`,
+    `建议结构：${input.taskUnderstanding.suitable_structure ?? '未提供'}`,
+    `任务注意：${input.taskUnderstanding.notes ?? '未提供'}`,
+    compactReferences,
+    '输出要求：',
+    '- 所有字段都尽量简短直接，一句中文即可。',
+    '- warnings 最多 3 条。',
+    '- cover_strategy 和 cta_strategy 可以简短，但不要省略。',
+  ].join('\n');
+}
+
 function createDefaultStrategyDependencies(): StrategyDependencies {
   return {
     generateTaskUnderstanding: async ({ system, prompt }) => {
+      const modelId = process.env.LLM_MODEL_ANALYSIS || 'gpt-4o';
+
+      if (shouldUseTextStructuredOutputFallback()) {
+        return generateStructuredJsonText({
+          modelId,
+          system,
+          prompt,
+          schema: taskUnderstandingSchema,
+          validate: isTaskUnderstandingResult,
+          label: '任务理解',
+          temperature: 0,
+          maxOutputTokens: 400,
+        });
+      }
+
       const { object } = await generateObject({
-        model: llmAnalysis(process.env.LLM_MODEL_ANALYSIS || 'gpt-4o'),
+        model: llmAnalysis(modelId),
         schema: jsonSchema<TaskUnderstandingResult>(taskUnderstandingSchema),
         system,
         prompt,
@@ -144,15 +205,33 @@ function createDefaultStrategyDependencies(): StrategyDependencies {
 
 function createDefaultStreamStrategyDependencies(): StreamStrategyDependencies {
   return {
-    streamStrategyObject: ({ system, prompt }) =>
-      streamObject({
-        model: llmAnalysis(process.env.LLM_MODEL_ANALYSIS || 'gpt-4o'),
+    streamStrategyObject: ({ system, prompt, input }) => {
+      const modelId = process.env.LLM_MODEL_ANALYSIS || 'gpt-4o';
+
+      if (shouldUseTextStructuredOutputFallback()) {
+        return createSingleObjectStream(
+          generateStructuredJsonText({
+            modelId,
+            system: '你是小红书内容策略师。请用紧凑、直接的中文输出策略 JSON。',
+            prompt: buildCompactStrategyFallbackPrompt(input),
+            schema: strategySchema,
+            validate: isStrategyResult,
+            label: '策略生成',
+            temperature: 0.2,
+            maxOutputTokens: 220,
+          }).then((object) => object as unknown as Record<string, unknown>),
+        );
+      }
+
+      return streamObject({
+        model: llmAnalysis(modelId),
         schema: jsonSchema<StrategyResult>(strategySchema),
         system,
         prompt,
         temperature: 0.3,
         maxRetries: 3,
-      }),
+      });
+    },
   };
 }
 
@@ -446,6 +525,7 @@ export function startStrategyStream(
   return dependencies.streamStrategyObject({
     system: STRATEGY_SYSTEM_PROMPT,
     prompt: buildStrategyPrompt(input),
+    input,
   });
 }
 

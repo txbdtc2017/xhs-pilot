@@ -26,6 +26,7 @@ import {
 } from './state';
 import { createPageCopy } from './copy';
 import { CreateComposerForm, type CreateComposerFormClasses } from './composer-form';
+import { GenerationLogPanel, type GenerationLogPanelClasses } from './generation-log-panel';
 import { ImageWorkbench, type ImageWorkbenchClasses } from './image-workbench';
 import styles from './page.module.css';
 
@@ -70,6 +71,10 @@ function formatHistoryDate(value: string | null | undefined): string {
 
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '未知时间' : date.toLocaleString('zh-CN');
+}
+
+function createTimestamp(): string {
+  return new Date().toISOString();
 }
 
 function CreatePageClient() {
@@ -243,6 +248,55 @@ function CreatePageClient() {
     };
   }, [state.selectedHistoryDetail?.active_image_job?.id, state.selectedHistoryDetail?.task.id]);
 
+  useEffect(() => {
+    if (!state.isSubmitting) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      dispatch({
+        type: 'clock_ticked',
+        now: createTimestamp(),
+      });
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [state.isSubmitting]);
+
+  useEffect(() => {
+    if (!state.isSubmitting || state.idleWarningForStep === state.step) {
+      return;
+    }
+
+    const referenceAt = state.lastServerEventAt ?? state.submitStartedAt;
+    if (!referenceAt) {
+      return;
+    }
+
+    const quietThresholdMs = 10_000;
+    const elapsedMs = Date.now() - Date.parse(referenceAt);
+    const delayMs = Math.max(0, quietThresholdMs - elapsedMs);
+
+    const timer = window.setTimeout(() => {
+      dispatch({
+        type: 'idle_warning_triggered',
+        now: createTimestamp(),
+      });
+    }, delayMs);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    state.idleWarningForStep,
+    state.isSubmitting,
+    state.lastServerEventAt,
+    state.step,
+    state.submitStartedAt,
+  ]);
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -250,7 +304,16 @@ function CreatePageClient() {
       return;
     }
 
-    dispatch({ type: 'submit_started' });
+    const submittedAt = createTimestamp();
+    dispatch({ type: 'submit_started', now: submittedAt });
+    dispatch({
+      type: 'log_appended',
+      source: 'client',
+      event: 'request_sent',
+      message: '已发送生成请求',
+      at: submittedAt,
+      step: 'understanding',
+    });
 
     try {
       const response = await fetch('/api/generate', {
@@ -268,6 +331,14 @@ function CreatePageClient() {
         }),
       });
 
+      dispatch({
+        type: 'log_appended',
+        source: 'client',
+        event: 'response_headers',
+        message: '已收到 SSE 响应头',
+        at: createTimestamp(),
+      });
+
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.error ?? '生成请求失败');
@@ -283,14 +354,28 @@ function CreatePageClient() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      let sawTerminalEvent = false;
       const parser = createSseParser((streamEvent) => {
+        if (streamEvent.event === 'done' || streamEvent.event === 'error') {
+          sawTerminalEvent = true;
+        }
+
         startTransition(() => {
           dispatch({
             type: 'stream_event',
             event: streamEvent.event as CreateStreamEvent['event'],
             data: streamEvent.data as CreateStreamEvent['data'],
+            receivedAt: createTimestamp(),
           } satisfies CreatePageAction);
         });
+      });
+
+      dispatch({
+        type: 'log_appended',
+        source: 'client',
+        event: 'stream_attached',
+        message: '已连接事件流',
+        at: createTimestamp(),
       });
 
       while (true) {
@@ -304,10 +389,16 @@ function CreatePageClient() {
 
       parser.push(decoder.decode());
       parser.flush();
+      dispatch({
+        type: 'stream_closed',
+        now: createTimestamp(),
+        expectedTerminal: sawTerminalEvent,
+      });
     } catch (error) {
       dispatch({
         type: 'submit_failed',
         message: getErrorMessage(error),
+        now: createTimestamp(),
       });
     }
   }
@@ -654,6 +745,21 @@ function CreatePageClient() {
             )}
           </section>
         </div>
+
+        <GenerationLogPanel
+          classes={styles as GenerationLogPanelClasses}
+          isExpanded={state.isLogPanelExpanded}
+          taskId={state.taskId}
+          currentStep={state.step}
+          isSubmitting={state.isSubmitting}
+          submitStartedAt={state.submitStartedAt}
+          currentStepStartedAt={state.currentStepStartedAt}
+          lastServerEventAt={state.lastServerEventAt}
+          clockNow={state.clockNow}
+          streamClosedUnexpectedly={state.streamClosedUnexpectedly}
+          logs={state.generationLogs}
+          onToggle={() => dispatch({ type: 'log_panel_toggled' })}
+        />
 
         <ImageWorkbench
           classes={styles as ImageWorkbenchClasses}

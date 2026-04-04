@@ -24,7 +24,6 @@ import {
   saveTaskStrategy,
   updateTask,
 } from './repository';
-import { resolveGenerationCapabilityStatus } from './capability';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,17 +110,6 @@ export function createGeneratePostHandler(
         return NextResponse.json({ error: 'topic is required' }, { status: 400 });
       }
 
-      const capabilityStatus = resolveGenerationCapabilityStatus(process.env);
-      if (!capabilityStatus.available) {
-        return NextResponse.json(
-          {
-            error: capabilityStatus.message,
-            code: capabilityStatus.code,
-          },
-          { status: 409 },
-        );
-      }
-
       const task = await dependencies.createTask(taskInput);
       const encoder = new TextEncoder();
 
@@ -134,11 +122,19 @@ export function createGeneratePostHandler(
           let currentStep: GenerationStep = 'understanding';
 
           try {
+            sendEvent('status', {
+              step: 'understanding',
+              message: '开始任务理解',
+            });
             await dependencies.updateTask(task.id, { status: 'understanding' });
             const taskUnderstanding = await dependencies.understandTask(taskInput);
             sendEvent('task_understanding', taskUnderstanding);
 
             currentStep = 'searching';
+            sendEvent('status', {
+              step: 'searching',
+              message: '开始检索参考样本',
+            });
             await dependencies.updateTask(task.id, { status: 'searching' });
             const retrieval = await dependencies.retrieveTaskReferencesFromUnderstanding(taskUnderstanding);
             const referenceSelection = selectTaskReferences(
@@ -159,6 +155,10 @@ export function createGeneratePostHandler(
             );
 
             currentStep = 'strategizing';
+            sendEvent('status', {
+              step: 'strategizing',
+              message: '开始生成策略',
+            });
             await dependencies.updateTask(task.id, { status: 'strategizing' });
             const strategyStream = await dependencies.startStrategyStream({
               taskInput,
@@ -168,6 +168,10 @@ export function createGeneratePostHandler(
             });
 
             let lastStrategySnapshot = '';
+            sendEvent('status', {
+              step: 'strategizing',
+              message: '等待最终策略定稿',
+            });
             for await (const partial of strategyStream.partialObjectStream) {
               if (partial && Object.keys(partial).length > 0) {
                 lastStrategySnapshot = JSON.stringify(partial);
@@ -183,6 +187,10 @@ export function createGeneratePostHandler(
             await dependencies.saveTaskStrategy(task.id, strategy);
 
             currentStep = 'generating';
+            sendEvent('status', {
+              step: 'generating',
+              message: '开始生成正文',
+            });
             await dependencies.updateTask(task.id, { status: 'generating' });
             const generationStream = await dependencies.startGenerationStream({
               taskInput,
@@ -201,6 +209,10 @@ export function createGeneratePostHandler(
             }
 
             currentStep = 'persisting';
+            sendEvent('status', {
+              step: 'persisting',
+              message: '正在整理结构化结果',
+            });
             const parsed = parseGenerationOutput(fullText);
             await dependencies.saveTaskOutputs(task.id, parsed);
             await dependencies.updateTask(task.id, {

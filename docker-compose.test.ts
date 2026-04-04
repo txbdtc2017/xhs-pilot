@@ -15,8 +15,11 @@ test('docker compose uses a dedicated migrate service before app and worker star
 
   assert.match(composeFile, /\n  migrate:\n/);
   assert.match(composeFile, /migrate:[\s\S]*command:\s+sh -lc "\.\/scripts\/with-env\.sh node-pg-migrate up"/);
+  assert.match(composeFile, /migrate:[\s\S]*volumes:\s*\n\s*-\s*\.\/\.credentials:\/app\/\.credentials:ro/);
   assert.match(composeFile, /app:[\s\S]*migrate:\s*\n\s*condition:\s*service_completed_successfully/);
+  assert.match(composeFile, /app:[\s\S]*volumes:\s*\n\s*-\s*\.\/\.credentials:\/app\/\.credentials:ro[\s\S]*-\s*\.\/uploads:\/app\/uploads/);
   assert.match(composeFile, /worker:[\s\S]*migrate:\s*\n\s*condition:\s*service_completed_successfully/);
+  assert.match(composeFile, /worker:[\s\S]*volumes:\s*\n\s*-\s*\.\/\.credentials:\/app\/\.credentials:ro[\s\S]*-\s*\.\/uploads:\/app\/uploads/);
   assert.doesNotMatch(composeFile, /worker:[\s\S]*node-pg-migrate up[\s\S]*restart:/);
   assert.doesNotMatch(
     dockerfile,

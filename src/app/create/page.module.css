@@ -319,6 +319,118 @@
   box-shadow: inset 0 0 0 1px rgba(255, 248, 243, 0.08);
 }
 
+.logPanel {
+  gap: 16px;
+}
+
+.logSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(252, 248, 242, 0.92);
+  border: 1px solid rgba(78, 61, 45, 0.08);
+}
+
+.logSummaryMeta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--create-heading-color);
+}
+
+.logToggle {
+  min-width: 76px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(78, 61, 45, 0.12);
+  background: rgba(255, 252, 247, 0.96);
+  font-weight: 600;
+}
+
+.logMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.logMetaCard {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(78, 61, 45, 0.08);
+  background: rgba(255, 252, 247, 0.9);
+}
+
+.logMetaLabel {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.logMetaValue {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--create-heading-color);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.logTimeline {
+  display: grid;
+  gap: 10px;
+}
+
+.logRow {
+  display: grid;
+  gap: 8px;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(78, 61, 45, 0.1);
+  background: rgba(255, 252, 247, 0.94);
+}
+
+.logRowServer {
+  border-left: 4px solid rgba(180, 35, 53, 0.36);
+}
+
+.logRowClient {
+  border-left: 4px solid rgba(119, 96, 76, 0.28);
+}
+
+.logRowSystem {
+  border-left: 4px solid rgba(193, 142, 50, 0.4);
+}
+
+.logRowHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.logSource,
+.logEvent,
+.logTimestamp {
+  font-size: 12px;
+}
+
+.logSource {
+  font-weight: 700;
+  color: var(--create-heading-color);
+}
+
+.logEvent,
+.logTimestamp {
+  color: var(--color-text-secondary);
+}
+
+.logMessage {
+  line-height: 1.65;
+  color: var(--color-text-primary);
+}
+
 .emptyState {
   padding: 16px;
   border-radius: 14px;
@@ -520,6 +632,10 @@
   .historyGrid {
     grid-template-columns: 1fr;
   }
+
+  .logMetaGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -537,6 +653,10 @@
   }
 
   .controlGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .logMetaGrid {
     grid-template-columns: 1fr;
   }
 

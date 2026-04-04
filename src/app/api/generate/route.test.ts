@@ -160,12 +160,18 @@ test('POST /api/generate streams understanding, references, strategy, generation
 
   const events = await readSseEvents(response);
   assert.deepEqual(events.map((event) => event.event), [
+    'status',
     'task_understanding',
+    'status',
     'references',
+    'status',
+    'status',
     'strategy_snapshot',
     'strategy_snapshot',
+    'status',
     'generation_delta',
     'generation_delta',
+    'status',
     'generation_complete',
     'done',
   ]);
@@ -221,7 +227,51 @@ test('POST /api/generate streams understanding, references, strategy, generation
   });
 });
 
-test('POST /api/generate rejects unsupported Kimi anthropic generation before task creation', async () => {
+test('POST /api/generate emits status events before each long-running generation stage', async () => {
+  const POST = createGeneratePostHandler({
+    createTask: async () => ({ id: 'task-status' }),
+    updateTask: async () => {},
+    saveTaskReferences: async () => {},
+    saveTaskStrategy: async () => {},
+    saveTaskOutputs: async () => {},
+    understandTask: async () => createTaskUnderstanding(),
+    retrieveTaskReferencesFromUnderstanding: async () => ({
+      searchMode: 'hybrid' as const,
+      searchModeReason: null,
+      referenceMode: 'zero-shot' as const,
+      similarSamples: [],
+      taskUnderstanding: createTaskUnderstanding(),
+      taskEmbedding: [],
+    }),
+    startStrategyStream: async () => ({
+      partialObjectStream: createAsyncIterable([createStrategyResult()]),
+      object: Promise.resolve(createStrategyResult()),
+    }),
+    startGenerationStream: async () => ({
+      textStream: createAsyncIterable([createGenerationTemplate()]),
+    }),
+  });
+
+  const response = await POST(new Request('http://localhost/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic: '状态事件任务' }),
+  }));
+
+  const events = await readSseEvents(response);
+  const statusEvents = events.filter((event) => event.event === 'status');
+
+  assert.deepEqual(statusEvents.map((event) => event.data), [
+    { step: 'understanding', message: '开始任务理解' },
+    { step: 'searching', message: '开始检索参考样本' },
+    { step: 'strategizing', message: '开始生成策略' },
+    { step: 'strategizing', message: '等待最终策略定稿' },
+    { step: 'generating', message: '开始生成正文' },
+    { step: 'persisting', message: '正在整理结构化结果' },
+  ]);
+});
+
+test('POST /api/generate allows Kimi anthropic generation to proceed', async () => {
   const originalProtocol = process.env.LLM_PROTOCOL;
   const originalBaseUrl = process.env.LLM_BASE_URL;
   let createTaskCalled = false;
@@ -263,12 +313,12 @@ test('POST /api/generate rejects unsupported Kimi anthropic generation before ta
       body: JSON.stringify({ topic: '不兼容配置任务' }),
     }));
 
-    assert.equal(response.status, 409);
-    assert.deepEqual(await response.json(), {
-      error: '当前 Kimi Anthropic 配置暂不支持内容生成，请切换 provider 或启用兼容模式。',
-      code: 'GENERATION_UNSUPPORTED_PROVIDER',
-    });
-    assert.equal(createTaskCalled, false);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Content-Type'), 'text/event-stream');
+    assert.equal(createTaskCalled, true);
+
+    const events = await readSseEvents(response);
+    assert.equal(events.at(-1)?.event, 'done');
   } finally {
     process.env.LLM_PROTOCOL = originalProtocol;
     process.env.LLM_BASE_URL = originalBaseUrl;

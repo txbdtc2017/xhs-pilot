@@ -190,6 +190,28 @@ export interface HistoryTaskDetail {
   feedback: Record<string, unknown> | null;
 }
 
+export type CreateStep =
+  | 'idle'
+  | 'understanding'
+  | 'searching'
+  | 'strategizing'
+  | 'generating'
+  | 'completed'
+  | 'failed';
+
+export type RuntimeLogStep = CreateStep | 'persisting';
+export type GenerationLogSource = 'client' | 'server' | 'system';
+
+export interface GenerationLogEntry {
+  id: string;
+  at: string;
+  source: GenerationLogSource;
+  event: string;
+  message: string;
+  step?: RuntimeLogStep;
+  detail?: string;
+}
+
 export interface CreatePageState {
   form: CreateFormValues;
   imageConfig: ImageConfigValues;
@@ -197,13 +219,21 @@ export interface CreatePageState {
   defaultImageProvider: ImageProvider | null;
   isSubmitting: boolean;
   error: string | null;
-  step: 'idle' | 'understanding' | 'searching' | 'strategizing' | 'generating' | 'completed' | 'failed';
+  step: CreateStep;
   taskId: string | null;
   taskUnderstanding: TaskUnderstandingPayload | null;
   references: ReferencesPayload | null;
   strategySnapshot: StrategySnapshotPayload | null;
   generationText: string;
   outputs: GenerationCompletePayload | null;
+  generationLogs: GenerationLogEntry[];
+  lastServerEventAt: string | null;
+  currentStepStartedAt: string | null;
+  submitStartedAt: string | null;
+  clockNow: string | null;
+  idleWarningForStep: CreateStep | null;
+  streamClosedUnexpectedly: boolean;
+  isLogPanelExpanded: boolean;
   historyTasks: HistoryTaskSummary[];
   isHistoryLoading: boolean;
   historyError: string | null;
@@ -215,6 +245,7 @@ export interface CreatePageState {
 }
 
 export type CreateStreamEvent =
+  | { event: 'status'; data: { step: RuntimeLogStep; message: string } }
   | { event: 'task_understanding'; data: TaskUnderstandingPayload }
   | { event: 'references'; data: ReferencesPayload }
   | { event: 'strategy_snapshot'; data: StrategySnapshotPayload }
@@ -227,9 +258,22 @@ export type CreatePageAction =
   | { type: 'form_changed'; field: keyof CreateFormValues; value: string | boolean }
   | { type: 'image_config_changed'; field: keyof ImageConfigValues; value: string | number }
   | { type: 'image_providers_loaded'; providers: ImageProviderPayload[]; defaultProvider: ImageProvider | null }
-  | { type: 'submit_started' }
-  | { type: 'submit_failed'; message: string }
-  | { type: 'stream_event'; event: CreateStreamEvent['event']; data: CreateStreamEvent['data'] }
+  | { type: 'submit_started'; now?: string }
+  | { type: 'submit_failed'; message: string; now?: string }
+  | { type: 'stream_event'; event: CreateStreamEvent['event']; data: CreateStreamEvent['data']; receivedAt?: string }
+  | {
+    type: 'log_appended';
+    source: GenerationLogSource;
+    event: string;
+    message: string;
+    at?: string;
+    step?: RuntimeLogStep;
+    detail?: string;
+  }
+  | { type: 'clock_ticked'; now?: string }
+  | { type: 'idle_warning_triggered'; now?: string }
+  | { type: 'stream_closed'; now?: string; expectedTerminal: boolean }
+  | { type: 'log_panel_toggled' }
   | { type: 'history_list_requested' }
   | { type: 'history_list_loaded'; tasks: HistoryTaskSummary[] }
   | { type: 'history_detail_requested'; taskId: string; outputId?: string | null }
@@ -269,6 +313,14 @@ export function createInitialCreateState(): CreatePageState {
     strategySnapshot: null,
     generationText: '',
     outputs: null,
+    generationLogs: [],
+    lastServerEventAt: null,
+    currentStepStartedAt: null,
+    submitStartedAt: null,
+    clockNow: null,
+    idleWarningForStep: null,
+    streamClosedUnexpectedly: false,
+    isLogPanelExpanded: false,
     historyTasks: [],
     isHistoryLoading: false,
     historyError: null,
@@ -278,6 +330,90 @@ export function createInitialCreateState(): CreatePageState {
     isImageLoading: false,
     imageError: null,
   };
+}
+
+function createTimestamp(now?: string): string {
+  return now ?? new Date().toISOString();
+}
+
+function appendGenerationLog(
+  state: CreatePageState,
+  params: {
+    source: GenerationLogSource;
+    event: string;
+    message: string;
+    at?: string;
+    step?: RuntimeLogStep;
+    detail?: string;
+  },
+): CreatePageState {
+  const at = createTimestamp(params.at);
+
+  return {
+    ...state,
+    generationLogs: [
+      ...state.generationLogs,
+      {
+        id: `log-${state.generationLogs.length + 1}`,
+        at,
+        source: params.source,
+        event: params.event,
+        message: params.message,
+        step: params.step,
+        detail: params.detail,
+      },
+    ],
+  };
+}
+
+function updateVisibleStep(
+  state: CreatePageState,
+  nextStep: CreateStep,
+  at: string,
+): CreatePageState {
+  if (state.step === nextStep) {
+    return {
+      ...state,
+      clockNow: at,
+    };
+  }
+
+  return {
+    ...state,
+    step: nextStep,
+    currentStepStartedAt: at,
+    clockNow: at,
+    idleWarningForStep: null,
+  };
+}
+
+function applyServerEventMetadata(
+  state: CreatePageState,
+  at: string,
+): CreatePageState {
+  return {
+    ...state,
+    lastServerEventAt: at,
+    clockNow: at,
+  };
+}
+
+function mapRuntimeStepToVisibleStep(
+  step: RuntimeLogStep,
+  currentStep: CreateStep,
+): CreateStep {
+  switch (step) {
+    case 'idle':
+    case 'understanding':
+    case 'searching':
+    case 'strategizing':
+    case 'generating':
+    case 'completed':
+    case 'failed':
+      return step;
+    case 'persisting':
+      return currentStep;
+  }
 }
 
 function mergeImageAssets(
@@ -318,56 +454,138 @@ function mergeImageJobSnapshot(
 export function applyStreamEvent(
   state: CreatePageState,
   event: CreateStreamEvent,
+  receivedAt = new Date().toISOString(),
 ): CreatePageState {
+  const nextState = applyServerEventMetadata(state, receivedAt);
+
   switch (event.event) {
+    case 'status': {
+      const visibleStep = mapRuntimeStepToVisibleStep(event.data.step, nextState.step);
+
+      return appendGenerationLog(
+        updateVisibleStep(nextState, visibleStep, receivedAt),
+        {
+          source: 'server',
+          event: 'status',
+          message: event.data.message,
+          at: receivedAt,
+          step: event.data.step,
+        },
+      );
+    }
     case 'task_understanding':
-      return {
-        ...state,
-        step: 'understanding',
+      return appendGenerationLog({
+        ...updateVisibleStep(nextState, 'understanding', receivedAt),
         taskUnderstanding: event.data,
-      };
+      }, {
+        source: 'server',
+        event: 'task_understanding',
+        message: '任务理解完成',
+        at: receivedAt,
+        step: 'understanding',
+      });
     case 'references':
-      return {
-        ...state,
-        step: 'searching',
+      return appendGenerationLog({
+        ...updateVisibleStep(nextState, 'searching', receivedAt),
         references: event.data,
-      };
-    case 'strategy_snapshot':
-      return {
-        ...state,
-        step: 'strategizing',
+      }, {
+        source: 'server',
+        event: 'references',
+        message: '参考检索完成',
+        at: receivedAt,
+        step: 'searching',
+      });
+    case 'strategy_snapshot': {
+      const isFirstSnapshot = state.strategySnapshot == null;
+      const becameFinal = Boolean(event.data.strategy_summary) && !state.strategySnapshot?.strategy_summary;
+      let withSnapshot: CreatePageState = {
+        ...updateVisibleStep(nextState, 'strategizing', receivedAt),
         strategySnapshot: {
           ...state.strategySnapshot,
           ...event.data,
         },
       };
-    case 'generation_delta':
-      return {
-        ...state,
-        step: 'generating',
+
+      if (isFirstSnapshot) {
+        withSnapshot = appendGenerationLog(withSnapshot, {
+          source: 'server',
+          event: 'strategy_snapshot',
+          message: '收到首个策略快照',
+          at: receivedAt,
+          step: 'strategizing',
+        });
+      }
+
+      if (becameFinal) {
+        withSnapshot = appendGenerationLog(withSnapshot, {
+          source: 'server',
+          event: 'strategy_snapshot_final',
+          message: '策略已定稿',
+          at: receivedAt,
+          step: 'strategizing',
+        });
+      }
+
+      return withSnapshot;
+    }
+    case 'generation_delta': {
+      const shouldLogStart = state.step !== 'generating';
+      let withText: CreatePageState = {
+        ...updateVisibleStep(nextState, 'generating', receivedAt),
         generationText: `${state.generationText}${event.data.text}`,
       };
+
+      if (shouldLogStart) {
+        withText = appendGenerationLog(withText, {
+          source: 'server',
+          event: 'generation_delta_start',
+          message: '正文流已开始',
+          at: receivedAt,
+          step: 'generating',
+        });
+      }
+
+      return withText;
+    }
     case 'generation_complete':
-      return {
-        ...state,
-        step: 'completed',
+      return appendGenerationLog({
+        ...updateVisibleStep(nextState, 'completed', receivedAt),
         isSubmitting: false,
         outputs: event.data,
-      };
+      }, {
+        source: 'server',
+        event: 'generation_complete',
+        message: '结构化结果已生成',
+        at: receivedAt,
+        step: 'persisting',
+      });
     case 'done':
-      return {
-        ...state,
-        step: 'completed',
+      return appendGenerationLog({
+        ...updateVisibleStep(nextState, 'completed', receivedAt),
         isSubmitting: false,
         taskId: event.data.task_id,
-      };
+        streamClosedUnexpectedly: false,
+      }, {
+        source: 'server',
+        event: 'done',
+        message: '任务完成',
+        at: receivedAt,
+        step: 'completed',
+      });
     case 'error':
-      return {
-        ...state,
-        step: 'failed',
+      return appendGenerationLog({
+        ...updateVisibleStep(nextState, 'failed', receivedAt),
         isSubmitting: false,
         error: event.data.message,
-      };
+        isLogPanelExpanded: true,
+      }, {
+        source: 'server',
+        event: 'error',
+        message: `生成失败：${event.data.message}`,
+        at: receivedAt,
+        step: event.data.step as RuntimeLogStep,
+        detail: event.data.step,
+      });
   }
 }
 
@@ -419,13 +637,84 @@ export function createPageReducer(
         strategySnapshot: null,
         generationText: '',
         outputs: null,
+        generationLogs: [],
+        lastServerEventAt: null,
+        currentStepStartedAt: createTimestamp(action.now),
+        submitStartedAt: createTimestamp(action.now),
+        clockNow: createTimestamp(action.now),
+        idleWarningForStep: null,
+        streamClosedUnexpectedly: false,
+        isLogPanelExpanded: true,
       };
     case 'submit_failed':
-      return {
+      return appendGenerationLog({
         ...state,
         isSubmitting: false,
         step: 'failed',
         error: action.message,
+        clockNow: createTimestamp(action.now),
+        isLogPanelExpanded: true,
+      }, {
+        source: 'system',
+        event: 'submit_failed',
+        message: `生成请求失败：${action.message}`,
+        at: action.now,
+        step: 'failed',
+      });
+    case 'log_appended':
+      return appendGenerationLog(state, action);
+    case 'clock_ticked':
+      return {
+        ...state,
+        clockNow: createTimestamp(action.now),
+      };
+    case 'idle_warning_triggered':
+      if (!state.isSubmitting || state.idleWarningForStep === state.step) {
+        return state;
+      }
+
+      return appendGenerationLog({
+        ...state,
+        clockNow: createTimestamp(action.now),
+        idleWarningForStep: state.step,
+        isLogPanelExpanded: true,
+      }, {
+        source: 'system',
+        event: 'idle_warning',
+        message: '10 秒未收到新事件，仍在等待服务端返回',
+        at: action.now,
+        step: state.step,
+      });
+    case 'stream_closed':
+      if (action.expectedTerminal) {
+        return appendGenerationLog(state, {
+          source: 'client',
+          event: 'stream_closed',
+          message: '事件流已正常关闭',
+          at: action.now,
+          step: state.step,
+        });
+      }
+
+      return appendGenerationLog({
+        ...state,
+        isSubmitting: false,
+        step: 'failed',
+        error: state.error ?? '事件流已提前关闭，请查看运行日志。',
+        streamClosedUnexpectedly: true,
+        isLogPanelExpanded: true,
+        clockNow: createTimestamp(action.now),
+      }, {
+        source: 'system',
+        event: 'stream_closed_unexpectedly',
+        message: '事件流已关闭，但未收到 done 或 error',
+        at: action.now,
+        step: state.step,
+      });
+    case 'log_panel_toggled':
+      return {
+        ...state,
+        isLogPanelExpanded: !state.isLogPanelExpanded,
       };
     case 'history_list_requested':
       return {
@@ -529,6 +818,11 @@ export function createPageReducer(
         historyError: action.message,
       };
     case 'stream_event':
-      return applyStreamEvent(state, action as unknown as CreateStreamEvent);
+      return applyStreamEvent(state, {
+        event: action.event,
+        data: action.data,
+      } as CreateStreamEvent, action.receivedAt);
+    default:
+      return state;
   }
 }

@@ -5,6 +5,8 @@ uploads
 backups
 .env
 .env.*
+.credentials
+.credentials/
 *.log
 *.tsbuildinfo
 dev.log
