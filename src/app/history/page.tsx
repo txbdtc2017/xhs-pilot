@@ -129,7 +129,7 @@ function HistoryPageClient() {
   );
 
   function handleTaskSelect(taskId: string) {
-    router.replace(buildHistoryPageHref(taskId), { scroll: false });
+    router.replace(buildHistoryTaskHref(taskId), { scroll: false });
   }
 
   function handleOutputSelect(outputId: string) {
@@ -137,7 +137,7 @@ function HistoryPageClient() {
       return;
     }
 
-    router.replace(buildHistoryPageHref(preferredTaskId, outputId), { scroll: false });
+    router.replace(buildHistoryTaskHref(preferredTaskId, outputId), { scroll: false });
   }
 
   function handleDeleteArm(taskId: string) {
