@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createGenerateTaskDetailGetHandler } from './[taskId]/route';
+import {
+  createGenerateTaskDetailDeleteHandler,
+  createGenerateTaskDetailGetHandler,
+} from './[taskId]/route';
 
 test('GET /api/generate/[taskId] returns the persisted generation detail', async () => {
   const GET = createGenerateTaskDetailGetHandler({
@@ -131,4 +134,67 @@ test('GET /api/generate/[taskId] forwards outputId when requesting a specific hi
   );
 
   assert.equal(response.status, 200);
+});
+
+test('DELETE /api/generate/[taskId] returns 204 on success', async () => {
+  const DELETE = createGenerateTaskDetailDeleteHandler({
+    getTaskDetail: async () => null,
+    hardDeleteTask: async (taskId) => {
+      assert.equal(taskId, 'task-1');
+      return { code: 'deleted' };
+    },
+  });
+
+  const response = await DELETE(
+    new Request('http://localhost/api/generate/task-1', { method: 'DELETE' }),
+    { params: Promise.resolve({ taskId: 'task-1' }) },
+  );
+
+  assert.equal(response.status, 204);
+});
+
+test('DELETE /api/generate/[taskId] returns 404 when task is missing', async () => {
+  const DELETE = createGenerateTaskDetailDeleteHandler({
+    getTaskDetail: async () => null,
+    hardDeleteTask: async () => ({ code: 'not_found' }),
+  });
+
+  const response = await DELETE(
+    new Request('http://localhost/api/generate/task-missing', { method: 'DELETE' }),
+    { params: Promise.resolve({ taskId: 'task-missing' }) },
+  );
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: 'Task not found' });
+});
+
+test('DELETE /api/generate/[taskId] returns 409 when task or image job is still active', async () => {
+  const DELETE = createGenerateTaskDetailDeleteHandler({
+    getTaskDetail: async () => null,
+    hardDeleteTask: async (taskId) => {
+      if (taskId === 'task-running') {
+        return { code: 'task_active' };
+      }
+
+      return { code: 'image_job_active' };
+    },
+  });
+
+  const runningResponse = await DELETE(
+    new Request('http://localhost/api/generate/task-running', { method: 'DELETE' }),
+    { params: Promise.resolve({ taskId: 'task-running' }) },
+  );
+  const imageResponse = await DELETE(
+    new Request('http://localhost/api/generate/task-image-active', { method: 'DELETE' }),
+    { params: Promise.resolve({ taskId: 'task-image-active' }) },
+  );
+
+  assert.equal(runningResponse.status, 409);
+  assert.deepEqual(await runningResponse.json(), {
+    error: 'Task is still active and cannot be deleted',
+  });
+  assert.equal(imageResponse.status, 409);
+  assert.deepEqual(await imageResponse.json(), {
+    error: 'Task still has active image jobs and cannot be deleted',
+  });
 });

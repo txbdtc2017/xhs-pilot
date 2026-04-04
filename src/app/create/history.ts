@@ -65,3 +65,19 @@ export async function fetchHistoryTaskDetail(
 
   return await response.json() as HistoryTaskDetail;
 }
+
+export async function deleteHistoryTask(
+  taskId: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<void> {
+  const response = await fetchImpl(`/api/generate/${encodeURIComponent(taskId)}`, {
+    method: 'DELETE',
+  });
+
+  if (response.status === 204) {
+    return;
+  }
+
+  const payload = await response.json().catch(() => null) as { error?: string } | null;
+  throw new Error(payload?.error ?? 'Failed to delete generation task');
+}

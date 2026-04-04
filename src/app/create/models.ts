@@ -173,6 +173,7 @@ export interface HistoryTaskSummary {
   status: string;
   reference_mode: string | null;
   created_at: string;
+  can_delete: boolean;
 }
 
 export interface HistoryTaskDetail {

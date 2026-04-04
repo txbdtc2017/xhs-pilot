@@ -5,6 +5,14 @@ import type { TaskInput, TaskReferencesSelection } from '@/agents/strategy';
 import type { TaskRuntimePayload } from '@/lib/generation-lifecycle';
 import { imageGenerationRepository, type ImageGenerationJobRow, type ImagePlanDetail, type OutputVersionSummary } from '@/app/api/image-generation/repository';
 
+type QueryResult<T> = Promise<T[]>;
+type QueryOneResult<T> = Promise<T | null>;
+
+type ImageGenerationRepositoryLike = Pick<
+  typeof imageGenerationRepository,
+  'listOutputVersions' | 'getLatestImagePlanForOutput' | 'getActiveImageJob'
+>;
+
 export interface TaskRow {
   id: string;
   topic: string;
@@ -43,6 +51,38 @@ export interface UpdateTaskPatch {
 export interface GetTaskHistoryParams {
   page: number;
   limit: number;
+}
+
+export interface GenerationRepositoryDependencies {
+  query: <T>(text: string, params?: unknown[]) => QueryResult<T>;
+  queryOne: <T>(text: string, params?: unknown[]) => QueryOneResult<T>;
+  imageGenerationRepository: ImageGenerationRepositoryLike;
+}
+
+interface TaskDeleteGuardRow {
+  task_status: string;
+  active_image_job_status: string | null;
+}
+
+type TaskHistorySummaryRow = Pick<
+  TaskRow,
+  'id' | 'topic' | 'status' | 'reference_mode' | 'created_at'
+> & {
+  can_delete: boolean;
+};
+
+export type HardDeleteTaskResult =
+  | { code: 'deleted' }
+  | { code: 'not_found' }
+  | { code: 'task_active' }
+  | { code: 'image_job_active' };
+
+function createDefaultGenerationRepositoryDependencies(): GenerationRepositoryDependencies {
+  return {
+    query,
+    queryOne,
+    imageGenerationRepository,
+  };
 }
 
 export async function createTask(input: TaskInput): Promise<{ id: string }> {
@@ -240,18 +280,38 @@ export async function saveTaskOutputs(
   );
 }
 
-export async function getTaskHistory({ page, limit }: GetTaskHistoryParams): Promise<{
-  tasks: Array<Pick<TaskRow, 'id' | 'topic' | 'status' | 'reference_mode' | 'created_at'>>;
+async function getTaskHistoryWith(
+  dependencies: GenerationRepositoryDependencies,
+  { page, limit }: GetTaskHistoryParams,
+): Promise<{
+  tasks: TaskHistorySummaryRow[];
   total: number;
 }> {
   const offset = (page - 1) * limit;
-  const totalRow = await queryOne<{ total: number }>(
+  const totalRow = await dependencies.queryOne<{ total: number }>(
     `SELECT COUNT(*)::int AS total FROM generation_tasks`,
   );
-  const tasks = await query<Pick<TaskRow, 'id' | 'topic' | 'status' | 'reference_mode' | 'created_at'>>(
+  const tasks = await dependencies.query<TaskHistorySummaryRow>(
     `
-      SELECT id, topic, status, reference_mode, created_at
-      FROM generation_tasks
+      SELECT
+        gt.id,
+        gt.topic,
+        gt.status,
+        gt.reference_mode,
+        gt.created_at,
+        CASE
+          WHEN gt.status NOT IN ('completed', 'failed') THEN FALSE
+          WHEN EXISTS (
+            SELECT 1
+            FROM generation_outputs go
+            INNER JOIN image_plans ip ON ip.output_id = go.id
+            INNER JOIN image_generation_jobs jobs ON jobs.plan_id = ip.id
+            WHERE go.task_id = gt.id
+              AND jobs.status IN ('queued', 'running')
+          ) THEN FALSE
+          ELSE TRUE
+        END AS can_delete
+      FROM generation_tasks gt
       ORDER BY created_at DESC
       LIMIT $1 OFFSET $2
     `,
@@ -264,7 +324,8 @@ export async function getTaskHistory({ page, limit }: GetTaskHistoryParams): Pro
   };
 }
 
-export async function getTaskDetail(
+async function getTaskDetailWith(
+  dependencies: GenerationRepositoryDependencies,
   taskId: string,
   options?: { selectedOutputId?: string | null },
 ): Promise<{
@@ -280,7 +341,7 @@ export async function getTaskDetail(
   reference_mode: string | null;
   feedback: Record<string, unknown> | null;
 } | null> {
-  const task = await queryOne<TaskRow>(
+  const task = await dependencies.queryOne<TaskRow>(
     `
       SELECT
         id,
@@ -312,7 +373,7 @@ export async function getTaskDetail(
     return null;
   }
 
-  const strategy = await queryOne<Record<string, unknown>>(
+  const strategy = await dependencies.queryOne<Record<string, unknown>>(
     `
       SELECT
         strategy_summary,
@@ -330,7 +391,7 @@ export async function getTaskDetail(
     [taskId],
   );
 
-  const references = await query<Record<string, unknown>>(
+  const references = await dependencies.query<Record<string, unknown>>(
     `
       SELECT
         tr.sample_id,
@@ -345,13 +406,13 @@ export async function getTaskDetail(
     [taskId],
   );
 
-  const outputVersions = await imageGenerationRepository.listOutputVersions(taskId);
+  const outputVersions = await dependencies.imageGenerationRepository.listOutputVersions(taskId);
   const selectedOutputId = outputVersions.some((output) => output.id === options?.selectedOutputId)
     ? options?.selectedOutputId ?? null
     : outputVersions[0]?.id ?? null;
 
   const outputs = selectedOutputId
-    ? await queryOne<Record<string, unknown>>(
+    ? await dependencies.queryOne<Record<string, unknown>>(
       `
         SELECT
           id,
@@ -375,14 +436,14 @@ export async function getTaskDetail(
     : null;
 
   const latestImagePlan = selectedOutputId
-    ? await imageGenerationRepository.getLatestImagePlanForOutput(selectedOutputId)
+    ? await dependencies.imageGenerationRepository.getLatestImagePlanForOutput(selectedOutputId)
     : null;
 
   const activeImageJob = latestImagePlan
-    ? await imageGenerationRepository.getActiveImageJob(latestImagePlan.plan.id)
+    ? await dependencies.imageGenerationRepository.getActiveImageJob(latestImagePlan.plan.id)
     : null;
 
-  const feedback = await queryOne<Record<string, unknown>>(
+  const feedback = await dependencies.queryOne<Record<string, unknown>>(
     `
       SELECT
         selected_title_index,
@@ -424,4 +485,85 @@ export async function getTaskDetail(
     reference_mode: task.reference_mode,
     feedback,
   };
+}
+
+async function hardDeleteTaskWith(
+  dependencies: GenerationRepositoryDependencies,
+  taskId: string,
+): Promise<HardDeleteTaskResult> {
+  const guard = await dependencies.queryOne<TaskDeleteGuardRow>(
+    `
+      SELECT
+        gt.status AS task_status,
+        (
+          SELECT jobs.status
+          FROM generation_outputs go
+          INNER JOIN image_plans ip ON ip.output_id = go.id
+          INNER JOIN image_generation_jobs jobs ON jobs.plan_id = ip.id
+          WHERE go.task_id = gt.id
+            AND jobs.status IN ('queued', 'running')
+          ORDER BY jobs.created_at DESC
+          LIMIT 1
+        ) AS active_image_job_status
+      FROM generation_tasks gt
+      WHERE gt.id = $1
+    `,
+    [taskId],
+  );
+
+  if (!guard) {
+    return { code: 'not_found' };
+  }
+
+  if (!['completed', 'failed'].includes(guard.task_status)) {
+    return { code: 'task_active' };
+  }
+
+  if (guard.active_image_job_status && ['queued', 'running'].includes(guard.active_image_job_status)) {
+    return { code: 'image_job_active' };
+  }
+
+  const deleted = await dependencies.queryOne<{ id: string }>(
+    `
+      DELETE FROM generation_tasks
+      WHERE id = $1
+      RETURNING id
+    `,
+    [taskId],
+  );
+
+  return deleted ? { code: 'deleted' } : { code: 'not_found' };
+}
+
+export function createGenerationRepository(
+  dependencies: GenerationRepositoryDependencies = createDefaultGenerationRepositoryDependencies(),
+) {
+  return {
+    getTaskHistory(params: GetTaskHistoryParams) {
+      return getTaskHistoryWith(dependencies, params);
+    },
+    getTaskDetail(taskId: string, options?: { selectedOutputId?: string | null }) {
+      return getTaskDetailWith(dependencies, taskId, options);
+    },
+    hardDeleteTask(taskId: string) {
+      return hardDeleteTaskWith(dependencies, taskId);
+    },
+  };
+}
+
+const generationRepository = createGenerationRepository();
+
+export async function getTaskHistory(params: GetTaskHistoryParams) {
+  return generationRepository.getTaskHistory(params);
+}
+
+export async function getTaskDetail(
+  taskId: string,
+  options?: { selectedOutputId?: string | null },
+) {
+  return generationRepository.getTaskDetail(taskId, options);
+}
+
+export async function hardDeleteTask(taskId: string) {
+  return generationRepository.hardDeleteTask(taskId);
 }
