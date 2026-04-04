@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -474,4 +475,10 @@ test('resolveReferenceMode distinguishes empty, low-similarity, and matched resu
     ], 0.6),
     'referenced',
   );
+});
+
+test('Kimi structured output fallback does not hardcode local maxOutputTokens caps', () => {
+  const source = fs.readFileSync(new URL('./strategy.ts', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(source, /maxOutputTokens:\s*\d+/);
 });

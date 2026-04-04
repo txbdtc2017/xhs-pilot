@@ -215,6 +215,22 @@ test('applyStreamEvent finalizes outputs and stores task id on done', () => {
   assert.equal(state.outputs?.titles[0], '标题一');
 });
 
+test('copy_context_loaded hydrates the copy tab from an existing task/output context', () => {
+  const detail = createHistoryDetail();
+  const state = createPageReducer(createInitialCreateState(), {
+    type: 'copy_context_loaded',
+    detail,
+  });
+
+  assert.equal(state.taskId, 'task-1');
+  assert.equal(state.form.topic, '历史任务一');
+  assert.equal(state.outputs?.id, 'output-2');
+  assert.equal(state.generationText, '正文一');
+  assert.equal(state.lifecycleState, 'completed');
+  assert.equal(state.step, 'completed');
+  assert.equal(state.strategySnapshot?.strategy_summary, '策略摘要');
+});
+
 test('applyStreamEvent records errors and leaves the latest content visible', () => {
   let state = createPageReducer(createInitialCreateState(), { type: 'submit_started' });
   state = applyStreamEvent(state, {

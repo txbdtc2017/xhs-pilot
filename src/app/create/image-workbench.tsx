@@ -4,7 +4,7 @@ import type {
   HistoryTaskDetail,
   ImageConfigValues,
   ImagePlanPayload,
-} from './state';
+} from './models';
 
 export type ImageWorkbenchClassName =
   | 'panel'

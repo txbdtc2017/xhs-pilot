@@ -4,7 +4,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { GenerationLogPanel } from './generation-log-panel';
-import type { TaskRuntimePayload } from './state';
+import type { TaskRuntimePayload } from './models';
 
 const testClasses = {
   panel: 'panel',

@@ -7,7 +7,7 @@ import type {
   ImageJobSnapshotPayload,
   ImagePlanPayload,
   ImageProviderPayload,
-} from './state';
+} from './models';
 
 type FetchLike = typeof fetch;
 

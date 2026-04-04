@@ -44,32 +44,10 @@ test('composer form groups the primary input, task settings, and submit actions 
         personaMode: 'balanced',
         needCoverSuggestion: true,
       },
-      imageConfig: {
-        provider: 'google_vertex',
-        visualDirectionOverride: '档案感结论大字',
-        bodyPageCap: 4,
-        coverCandidateCount: 2,
-        bodyCandidateCount: 1,
-      },
-      imageProviders: [
-        {
-          provider: 'openai',
-          label: 'OpenAI-Compatible',
-          available: true,
-          model: 'gpt-image-1',
-        },
-        {
-          provider: 'google_vertex',
-          label: 'Google Banana',
-          available: true,
-          model: 'gemini-3-pro-image-preview',
-        },
-      ],
       isSubmitting: false,
       error: null,
       onSubmit: () => undefined,
       onFieldChange: () => undefined,
-      onImageConfigChange: () => undefined,
     }),
   );
 
@@ -77,9 +55,6 @@ test('composer form groups the primary input, task settings, and submit actions 
   assert.match(html, /aria-label="任务参数区"/);
   assert.match(html, /aria-label="提交操作区"/);
   assert.match(html, /需要封面建议/);
-  assert.match(html, /图片提供方/);
-  assert.match(html, /Google Banana/);
-  assert.match(html, /图片视觉方向/);
-  assert.match(html, /正文页上限/);
+  assert.doesNotMatch(html, /图片提供方|Google Banana|图片视觉方向|正文页上限/);
   assert.match(html, /生成/);
 });

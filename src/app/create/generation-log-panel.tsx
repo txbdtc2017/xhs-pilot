@@ -1,6 +1,6 @@
 'use client'
 
-import type { CreateLifecycleState, CreateStep, GenerationLogEntry, TaskRuntimePayload } from './state';
+import type { CreateLifecycleState, CreateStep, GenerationLogEntry, TaskRuntimePayload } from './models';
 
 export type GenerationLogPanelClassName =
   | 'panel'

@@ -1,4 +1,4 @@
-import type { HistoryTaskDetail, HistoryTaskSummary } from './state';
+import type { HistoryTaskDetail, HistoryTaskSummary } from './models';
 
 type FetchLike = typeof fetch;
 
@@ -7,8 +7,35 @@ export function normalizeHistoryTaskId(value: string | null | undefined): string
   return trimmed ? trimmed : null;
 }
 
-export function buildHistoryTaskHref(taskId: string): string {
-  return `/create?taskId=${encodeURIComponent(taskId)}`;
+function buildTaskQuery(taskId?: string | null, outputId?: string | null): string {
+  const params = new URLSearchParams();
+
+  if (taskId?.trim()) {
+    params.set('taskId', taskId.trim());
+  }
+
+  if (outputId?.trim()) {
+    params.set('outputId', outputId.trim());
+  }
+
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+export function buildHistoryTaskHref(taskId: string, outputId?: string | null): string {
+  return `/history${buildTaskQuery(taskId, outputId)}`;
+}
+
+export function buildCreateImagesHref(taskId?: string | null, outputId?: string | null): string {
+  return `/create/images${buildTaskQuery(taskId, outputId)}`;
+}
+
+export function buildCreatePublishHref(taskId?: string | null, outputId?: string | null): string {
+  return `/create/publish${buildTaskQuery(taskId, outputId)}`;
+}
+
+export function buildCreateCopyHref(taskId?: string | null, outputId?: string | null): string {
+  return `/create${buildTaskQuery(taskId, outputId)}`;
 }
 
 export async function fetchHistoryTasks(

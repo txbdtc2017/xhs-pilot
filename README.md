@@ -84,7 +84,8 @@ LLM_MODEL_VISION=gpt-4o
 - 当前支持 `openai` 与 `anthropic-messages` 两种 LLM 协议
 - `VISION_*` 可与文本共用 provider，也可以独立覆盖
 - 图片生成能力是可选项，支持 OpenAI-compatible 和 Google Banana
-- 如果使用 Google Banana 且通过 Docker Compose 启动，请把 service account JSON 放到仓库根目录的 `.credentials/google-vertex.json`
+- 如果使用 Google Banana 且通过 Docker Compose 启动，请把你自己的 service account JSON 放到仓库根目录的 `.credentials/google-vertex.json`
+- 仓库会保留 `.credentials/` 目录，但不会提交其中的真实凭证文件
 - `EMBEDDING_*` 是可选增强项；任意关键项缺失时会回退到 `lexical-only`
 - 完整注释模板见 [`.env.example`](.env.example)
 
@@ -134,6 +135,7 @@ XHS Pilot 当前的配置边界比较明确：
 - 视觉解析链路优先读取 `VISION_PROTOCOL` / `VISION_API_KEY` / `VISION_BASE_URL`；未设置时逐字段回退到 `LLM_*`
 - 图片生成链路与 Vision 解析分开配置，支持 OpenAI-compatible 与 Google Banana
 - Google Banana 推荐使用 `IMAGE_GOOGLE_CREDENTIALS_PATH=./.credentials/google-vertex.json`
+- `.credentials/` 目录会随仓库保留，但目录里的真实凭证默认被 Git 忽略
 - `docker-compose.yml` 会把仓库内的 `.credentials/` 目录只读挂载到 `/app/.credentials`，因此同一份 `.env` 可以同时兼容 Docker Compose 和本机 `npm run dev`
 - Embedding 仍使用 OpenAI-compatible 语义；未完整配置时系统保持可用，但检索模式会退回 `lexical-only`
 - 当前官方仅支持 `STORAGE_PROVIDER=local`

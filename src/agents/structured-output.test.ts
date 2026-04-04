@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -50,6 +51,12 @@ test('parseStructuredJsonText repairs truncated JSON before validating it', asyn
   );
 
   assert.deepEqual(parsed, { ok: true, label: 'x' });
+});
+
+test('generateStructuredJsonText does not expose provider maxOutputTokens controls in production code', () => {
+  const source = fs.readFileSync(new URL('./structured-output.ts', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(source, /maxOutputTokens/);
 });
 
 test('createSingleObjectStream yields the resolved object once', async () => {

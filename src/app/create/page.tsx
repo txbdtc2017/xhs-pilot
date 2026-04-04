@@ -1,24 +1,20 @@
 'use client'
 
+import Link from 'next/link';
 import { Suspense, startTransition, useDeferredValue, useEffect, useReducer } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+
 import { getGenerationStepThresholds, type GenerationStep } from '@/lib/generation-lifecycle';
 import { createSseParser } from '@/lib/sse';
+
 import {
+  buildCreateCopyHref,
+  buildCreateImagesHref,
+  buildCreatePublishHref,
   buildHistoryTaskHref,
   fetchHistoryTaskDetail,
-  fetchHistoryTasks,
   normalizeHistoryTaskId,
 } from './history';
-import {
-  consumeImageJobEvents,
-  createImageJob,
-  createImagePlan,
-  fetchImageProviders,
-  fetchImageJobSnapshot,
-  selectImageAsset,
-  updateImagePlan,
-} from './image-api';
 import {
   createInitialCreateState,
   createPageReducer,
@@ -28,7 +24,7 @@ import {
 import { createPageCopy } from './copy';
 import { CreateComposerForm, type CreateComposerFormClasses } from './composer-form';
 import { GenerationLogPanel, type GenerationLogPanelClasses } from './generation-log-panel';
-import { ImageWorkbench, type ImageWorkbenchClasses } from './image-workbench';
+import { StudioTabs, type StudioTabsClasses } from './studio-tabs';
 import styles from './page.module.css';
 
 function getErrorMessage(error: unknown): string {
@@ -56,28 +52,6 @@ function renderPill(step: string, currentStep: string, lifecycleState: string) {
   return <span className={`${styles.pill} ${styles.pillIdle}`}>待开始</span>;
 }
 
-function readHistoryString(record: Record<string, unknown> | null | undefined, key: string): string {
-  if (!record) {
-    return '';
-  }
-
-  const value = record[key];
-  return typeof value === 'string' ? value : '';
-}
-
-function readHistoryBoolean(record: Record<string, unknown> | null | undefined, key: string): boolean {
-  return Boolean(record?.[key]);
-}
-
-function formatHistoryDate(value: string | null | undefined): string {
-  if (!value) {
-    return '未知时间';
-  }
-
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '未知时间' : date.toLocaleString('zh-CN');
-}
-
 function createTimestamp(): string {
   return new Date().toISOString();
 }
@@ -87,95 +61,34 @@ function CreatePageClient() {
   const searchParams = useSearchParams();
   const [state, dispatch] = useReducer(createPageReducer, undefined, createInitialCreateState);
   const deferredGenerationText = useDeferredValue(state.generationText);
-  const requestedHistoryTaskId = normalizeHistoryTaskId(searchParams.get('taskId'));
+  const requestedTaskId = normalizeHistoryTaskId(searchParams.get('taskId'));
+  const requestedOutputId = normalizeHistoryTaskId(searchParams.get('outputId'));
+  const contextTaskId = state.taskId ?? requestedTaskId;
+  const contextOutputId = state.outputs?.id ?? requestedOutputId;
 
   useEffect(() => {
-    let isMounted = true;
-
-    dispatch({ type: 'history_list_requested' });
-    void fetchHistoryTasks()
-      .then((tasks) => {
-        if (!isMounted) {
-          return;
-        }
-
-        dispatch({ type: 'history_list_loaded', tasks });
-      })
-      .catch((error) => {
-        if (!isMounted) {
-          return;
-        }
-
-        dispatch({ type: 'history_failed', message: getErrorMessage(error) });
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    void fetchImageProviders()
-      .then((payload) => {
-        if (!isMounted) {
-          return;
-        }
-
-        dispatch({
-          type: 'image_providers_loaded',
-          providers: payload.providers,
-          defaultProvider: payload.default_provider,
-        });
-      })
-      .catch((error) => {
-        if (!isMounted) {
-          return;
-        }
-
-        dispatch({ type: 'image_failed', message: getErrorMessage(error) });
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const preferredHistoryTaskId =
-    requestedHistoryTaskId ?? state.selectedHistoryTaskId ?? state.historyTasks[0]?.id ?? null;
-  const preferredHistoryOutputId =
-    state.selectedHistoryTaskId === preferredHistoryTaskId ? state.selectedHistoryOutputId : null;
-
-  useEffect(() => {
-    if (!preferredHistoryTaskId) {
+    if (!requestedTaskId || requestedOutputId) {
       return;
     }
 
-    if (
-      state.selectedHistoryDetail?.task.id === preferredHistoryTaskId &&
-      state.selectedHistoryDetail.selected_output_id === (preferredHistoryOutputId ?? state.selectedHistoryDetail.selected_output_id)
-    ) {
+    router.replace(buildHistoryTaskHref(requestedTaskId), { scroll: false });
+  }, [requestedOutputId, requestedTaskId, router]);
+
+  useEffect(() => {
+    if (!requestedTaskId || !requestedOutputId || state.isSubmitting || state.taskId === requestedTaskId) {
       return;
     }
 
     let isMounted = true;
-    dispatch({
-      type: 'history_detail_requested',
-      taskId: preferredHistoryTaskId,
-      outputId: preferredHistoryOutputId,
-    });
 
-    void fetchHistoryTaskDetail(preferredHistoryTaskId, preferredHistoryOutputId)
+    void fetchHistoryTaskDetail(requestedTaskId, requestedOutputId)
       .then((detail) => {
         if (!isMounted) {
           return;
         }
 
         dispatch({
-          type: 'history_detail_loaded',
-          taskId: preferredHistoryTaskId,
-          outputId: preferredHistoryOutputId,
+          type: 'copy_context_loaded',
           detail,
         });
       })
@@ -184,74 +97,30 @@ function CreatePageClient() {
           return;
         }
 
-        dispatch({ type: 'history_failed', message: getErrorMessage(error) });
+        dispatch({
+          type: 'submit_failed',
+          message: getErrorMessage(error),
+          now: createTimestamp(),
+        });
       });
 
     return () => {
       isMounted = false;
     };
-  }, [
-    preferredHistoryOutputId,
-    preferredHistoryTaskId,
-    state.selectedHistoryDetail?.selected_output_id,
-    state.selectedHistoryDetail?.task.id,
-  ]);
+  }, [requestedOutputId, requestedTaskId, state.isSubmitting, state.taskId]);
 
   useEffect(() => {
-    if (!state.taskId || requestedHistoryTaskId === state.taskId) {
+    if (!state.outputs?.id || !state.taskId) {
       return;
     }
 
-    router.replace(buildHistoryTaskHref(state.taskId));
-  }, [requestedHistoryTaskId, router, state.taskId]);
+    const nextHref = buildCreateCopyHref(state.taskId, state.outputs.id);
+    const currentHref = buildCreateCopyHref(requestedTaskId, requestedOutputId);
 
-  useEffect(() => {
-    const imageJobId = state.selectedHistoryDetail?.active_image_job?.id;
-    const imageTaskId = state.selectedHistoryDetail?.task.id;
-
-    if (!imageJobId || !imageTaskId) {
-      return;
+    if (nextHref !== currentHref) {
+      router.replace(nextHref, { scroll: false });
     }
-
-    const controller = new AbortController();
-
-    const refreshSnapshot = async () => {
-      const snapshot = await fetchImageJobSnapshot(imageJobId);
-      startTransition(() => {
-        dispatch({
-          type: 'image_job_snapshot_loaded',
-          taskId: imageTaskId,
-          snapshot,
-        });
-      });
-    };
-
-    void consumeImageJobEvents(
-      imageJobId,
-      () => {
-        void refreshSnapshot().catch((error) => {
-          startTransition(() => {
-            dispatch({
-              type: 'image_failed',
-              message: getErrorMessage(error),
-            });
-          });
-        });
-      },
-      { signal: controller.signal },
-    ).catch((error) => {
-      startTransition(() => {
-        dispatch({
-          type: 'image_failed',
-          message: getErrorMessage(error),
-        });
-      });
-    });
-
-    return () => {
-      controller.abort();
-    };
-  }, [state.selectedHistoryDetail?.active_image_job?.id, state.selectedHistoryDetail?.task.id]);
+  }, [requestedOutputId, requestedTaskId, router, state.outputs?.id, state.taskId]);
 
   useEffect(() => {
     if (!state.isSubmitting) {
@@ -414,123 +283,6 @@ function CreatePageClient() {
     }
   }
 
-  function handleHistorySelect(taskId: string) {
-    router.replace(buildHistoryTaskHref(taskId));
-  }
-
-  function handleHistoryOutputSelect(outputId: string) {
-    if (!preferredHistoryTaskId) {
-      return;
-    }
-
-    dispatch({
-      type: 'history_detail_requested',
-      taskId: preferredHistoryTaskId,
-      outputId,
-    });
-  }
-
-  async function handleCreateImagePlan() {
-    const detail = state.selectedHistoryDetail;
-    const outputId = state.selectedHistoryOutputId ?? detail?.selected_output_id ?? detail?.outputs?.id;
-    if (!detail || !outputId) {
-      return;
-    }
-
-    dispatch({ type: 'image_action_started' });
-
-    try {
-      const result = await createImagePlan(outputId, state.imageConfig);
-      dispatch({
-        type: 'image_plan_loaded',
-        taskId: detail.task.id,
-        outputId: result.selected_output.id,
-        plan: {
-          plan: result.plan,
-          pages: result.pages,
-          assets: [],
-          selected_assets: [],
-        },
-      });
-    } catch (error) {
-      dispatch({ type: 'image_failed', message: getErrorMessage(error) });
-    }
-  }
-
-  async function handleToggleImagePage(pageId: string, isEnabled: boolean) {
-    const detail = state.selectedHistoryDetail;
-    const planId = detail?.latest_image_plan?.plan.id;
-    if (!detail || !planId) {
-      return;
-    }
-
-    dispatch({ type: 'image_action_started' });
-
-    try {
-      const result = await updateImagePlan(planId, {
-        pages: [{ id: pageId, isEnabled }],
-      });
-      dispatch({
-        type: 'image_plan_loaded',
-        taskId: detail.task.id,
-        outputId: detail.selected_output_id ?? detail.outputs?.id ?? '',
-        plan: {
-          plan: result.plan,
-          pages: result.pages,
-          assets: detail.latest_image_plan?.assets ?? [],
-          selected_assets: detail.latest_image_plan?.selected_assets ?? [],
-        },
-      });
-    } catch (error) {
-      dispatch({ type: 'image_failed', message: getErrorMessage(error) });
-    }
-  }
-
-  async function runImageJob(scope: 'full' | 'page', planPageId?: string) {
-    const detail = state.selectedHistoryDetail;
-    const planId = detail?.latest_image_plan?.plan.id;
-    if (!detail || !planId) {
-      return;
-    }
-
-    dispatch({ type: 'image_action_started' });
-
-    try {
-      const result = await createImageJob(planId, {
-        scope,
-        planPageId: planPageId ?? null,
-      });
-      const snapshot = await fetchImageJobSnapshot(result.job.id);
-      dispatch({
-        type: 'image_job_snapshot_loaded',
-        taskId: detail.task.id,
-        snapshot,
-      });
-    } catch (error) {
-      dispatch({ type: 'image_failed', message: getErrorMessage(error) });
-    }
-  }
-
-  async function handleSelectImageAsset(assetId: string) {
-    const detail = state.selectedHistoryDetail;
-    if (!detail) {
-      return;
-    }
-
-    dispatch({ type: 'image_action_started' });
-
-    try {
-      const asset = await selectImageAsset(assetId);
-      dispatch({
-        type: 'image_asset_selected',
-        taskId: detail.task.id,
-        asset,
-      });
-    } catch (error) {
-      dispatch({ type: 'image_failed', message: getErrorMessage(error) });
-    }
-  }
-
   return (
     <main className={styles.page}>
       <div className={styles.shell}>
@@ -540,19 +292,21 @@ function CreatePageClient() {
           <p className={styles.subtitle}>{createPageCopy.heroSubtitle}</p>
         </header>
 
+        <StudioTabs
+          activeTab="copy"
+          classes={styles as unknown as StudioTabsClasses}
+          taskId={contextTaskId}
+          outputId={contextOutputId}
+        />
+
         <CreateComposerForm
           classes={styles as CreateComposerFormClasses}
           form={state.form}
-          imageConfig={state.imageConfig}
-          imageProviders={state.imageProviders}
           isSubmitting={state.isSubmitting}
           error={state.error}
           onSubmit={handleSubmit}
           onFieldChange={(field, value) =>
             dispatch({ type: 'form_changed', field, value })
-          }
-          onImageConfigChange={(field, value) =>
-            dispatch({ type: 'image_config_changed', field, value })
           }
         />
 
@@ -687,9 +441,9 @@ function CreatePageClient() {
                       ? state.runtime?.stalled_reason ?? '当前阶段已进入 stalled'
                       : state.lifecycleState === 'failed'
                         ? state.error ?? '任务失败'
-                    : state.isSubmitting
-                      ? '正在消费 generation_delta'
-                      : '等待开始'}
+                        : state.isSubmitting
+                          ? '正在消费 generation_delta'
+                          : '等待开始'}
                 </div>
               </div>
               {state.taskId ? (
@@ -704,7 +458,7 @@ function CreatePageClient() {
           <section className={`${styles.panel} ${styles.draftPanel}`}>
             <div className={styles.panelHeader}>
               <div className={styles.panelTitle}>生成结果</div>
-              <div className={styles.panelHint}>先接收流式文本，再整理成结构化结果。</div>
+              <div className={styles.panelHint}>这里现在只承接文案结果；图片创作已移到独立 tab。</div>
             </div>
 
             {state.outputs ? (
@@ -752,11 +506,19 @@ function CreatePageClient() {
                   <strong>配图建议</strong>
                   <div>{state.outputs.image_suggestions}</div>
                 </div>
+                <div className={styles.ctaRow}>
+                  <Link className={styles.secondaryButton} href={buildCreateImagesHref(state.taskId, state.outputs.id ?? null)}>
+                    去图片创作
+                  </Link>
+                  <Link className={styles.secondaryButton} href={buildCreatePublishHref(state.taskId, state.outputs.id ?? null)}>
+                    去发布
+                  </Link>
+                </div>
               </div>
             ) : deferredGenerationText ? (
               <div className={styles.streamBox}>{deferredGenerationText}</div>
             ) : (
-              <div className={styles.emptyState}>点击左侧“生成”后，这里会先出现流式文本，再切到结构化结果。</div>
+              <div className={styles.emptyState}>点击上方“生成”后，这里会先出现流式文本，再切到结构化结果。</div>
             )}
           </section>
         </div>
@@ -776,208 +538,6 @@ function CreatePageClient() {
           logs={state.generationLogs}
           onToggle={() => dispatch({ type: 'log_panel_toggled' })}
         />
-
-        <ImageWorkbench
-          classes={styles as ImageWorkbenchClasses}
-          detail={state.selectedHistoryDetail}
-          selectedOutputId={state.selectedHistoryOutputId}
-          imageConfig={state.imageConfig}
-          isLoading={state.isImageLoading}
-          error={state.imageError}
-          onSelectOutputVersion={handleHistoryOutputSelect}
-          onCreatePlan={handleCreateImagePlan}
-          onTogglePage={handleToggleImagePage}
-          onRunFullJob={() => {
-            void runImageJob('full');
-          }}
-          onRunPageJob={(pageId) => {
-            void runImageJob('page', pageId);
-          }}
-          onSelectAsset={(assetId) => {
-            void handleSelectImageAsset(assetId);
-          }}
-        />
-
-        <section className={styles.historyGrid}>
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div className={styles.panelTitle}>历史任务</div>
-              <div className={styles.panelHint}>回看之前的任务输入、参考分配、策略快照和生成结果。</div>
-            </div>
-
-            {state.historyError ? <div className={styles.errorBox}>{state.historyError}</div> : null}
-
-            {state.historyTasks.length > 0 ? (
-              <div className={styles.list}>
-                {state.historyTasks.map((task) => {
-                  const isActive = task.id === preferredHistoryTaskId;
-
-                  return (
-                    <button
-                      key={task.id}
-                      className={`${styles.historyTaskButton} ${isActive ? styles.historyTaskButtonActive : ''}`}
-                      type="button"
-                      onClick={() => handleHistorySelect(task.id)}
-                    >
-                      <div className={styles.historyTaskHeader}>
-                        <strong>{task.topic}</strong>
-                        <span className={styles.historyTaskStatus}>{task.status}</span>
-                      </div>
-                      <div className={styles.historyTaskMeta}>
-                        <span>{task.reference_mode ?? '未记录参考模式'}</span>
-                        <span>{formatHistoryDate(task.created_at)}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className={styles.emptyState}>
-                {state.isHistoryLoading ? '正在加载历史任务…' : '还没有可查看的历史任务。'}
-              </div>
-            )}
-          </section>
-
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div className={styles.panelTitle}>历史详情</div>
-              <div className={styles.panelHint}>把一条任务的输入、参考、策略、输出和反馈完整摊开，方便你判断哪些风格值得继续复用。</div>
-            </div>
-
-            {state.selectedHistoryDetail ? (
-              <div className={styles.list}>
-                <div className={styles.kvList}>
-                  <div className={styles.kvItem}>
-                    <div className={styles.kvLabel}>主题</div>
-                    <div className={styles.kvValue}>{state.selectedHistoryDetail.task.topic}</div>
-                  </div>
-                  <div className={styles.kvItem}>
-                    <div className={styles.kvLabel}>状态 / 参考模式</div>
-                    <div className={styles.kvValue}>
-                      {[state.selectedHistoryDetail.task.status, state.selectedHistoryDetail.reference_mode]
-                        .filter(Boolean)
-                        .join(' · ') || '未记录'}
-                    </div>
-                  </div>
-                  <div className={styles.kvItem}>
-                    <div className={styles.kvLabel}>当前阶段 / 最近进展</div>
-                    <div className={styles.kvValue}>
-                      {[
-                        state.selectedHistoryDetail.runtime.current_step ?? '未记录阶段',
-                        formatHistoryDate(state.selectedHistoryDetail.runtime.last_progress_at),
-                      ].join(' · ')}
-                    </div>
-                  </div>
-                  <div className={styles.kvItem}>
-                    <div className={styles.kvLabel}>最近心跳 / 异常原因</div>
-                    <div className={styles.kvValue}>
-                      {[
-                        formatHistoryDate(state.selectedHistoryDetail.runtime.last_heartbeat_at),
-                        state.selectedHistoryDetail.runtime.failure_reason
-                          ?? state.selectedHistoryDetail.runtime.stalled_reason
-                          ?? '未记录',
-                      ].join(' · ')}
-                    </div>
-                  </div>
-                  <div className={styles.kvItem}>
-                    <div className={styles.kvLabel}>目标人群 / 目标效果</div>
-                    <div className={styles.kvValue}>
-                      {[
-                        readHistoryString(state.selectedHistoryDetail.task, 'target_audience'),
-                        readHistoryString(state.selectedHistoryDetail.task, 'goal'),
-                      ]
-                        .filter(Boolean)
-                        .join(' · ') || '未记录'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className={styles.resultCard}>
-                  <strong>参考样本</strong>
-                  {state.selectedHistoryDetail.references.length > 0 ? (
-                    state.selectedHistoryDetail.references.map((reference, index) => (
-                      <div key={`${readHistoryString(reference, 'sample_id')}-${index}`}>
-                        <strong>{readHistoryString(reference, 'title') || '未命名样本'}</strong>
-                        <div className={styles.referenceMeta}>
-                          <span>{readHistoryString(reference, 'reference_type') || 'unknown'}</span>
-                          <span>{readHistoryString(reference, 'reason') || '未记录原因'}</span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className={styles.panelHint}>本次任务未引用样本，属于 zero-shot 或未记录场景。</div>
-                  )}
-                </div>
-
-                <div className={styles.resultCard}>
-                  <strong>策略摘要</strong>
-                  <div className={styles.kvList}>
-                    <div className={styles.kvItem}>
-                      <div className={styles.kvLabel}>概览</div>
-                      <div className={styles.kvValue}>
-                        {readHistoryString(state.selectedHistoryDetail.strategy, 'strategy_summary') || '未记录'}
-                      </div>
-                    </div>
-                    <div className={styles.kvItem}>
-                      <div className={styles.kvLabel}>标题 / 结构 / CTA</div>
-                      <div className={styles.kvValue}>
-                        {[
-                          readHistoryString(state.selectedHistoryDetail.strategy, 'title_strategy'),
-                          readHistoryString(state.selectedHistoryDetail.strategy, 'structure_strategy'),
-                          readHistoryString(state.selectedHistoryDetail.strategy, 'cta_strategy'),
-                        ]
-                          .filter(Boolean)
-                          .join('\n') || '未记录'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={styles.resultCard}>
-                  <strong>生成结果</strong>
-                  {state.selectedHistoryDetail.outputs ? (
-                    <div className={styles.list}>
-                      <div>标题：{state.selectedHistoryDetail.outputs.titles.join(' / ') || '未记录'}</div>
-                      <div>开头：{state.selectedHistoryDetail.outputs.openings.join(' / ') || '未记录'}</div>
-                      <div>正文：{state.selectedHistoryDetail.outputs.body_versions[0] || '未记录'}</div>
-                      <div>CTA：{state.selectedHistoryDetail.outputs.cta_versions.join(' / ') || '未记录'}</div>
-                      <div>标签：{state.selectedHistoryDetail.outputs.hashtags.join(' ') || '未记录'}</div>
-                      <div>首评：{state.selectedHistoryDetail.outputs.first_comment || '未记录'}</div>
-                    </div>
-                  ) : (
-                    <div className={styles.panelHint}>当前任务还没有持久化的生成输出。</div>
-                  )}
-                </div>
-
-                <div className={styles.resultCard}>
-                  <strong>反馈</strong>
-                  {state.selectedHistoryDetail.feedback ? (
-                    <div className={styles.kvList}>
-                      <div className={styles.kvItem}>
-                        <div className={styles.kvLabel}>是否已发布</div>
-                        <div className={styles.kvValue}>
-                          {readHistoryBoolean(state.selectedHistoryDetail.feedback, 'used_in_publish') ? '已发布' : '未发布'}
-                        </div>
-                      </div>
-                      <div className={styles.kvItem}>
-                        <div className={styles.kvLabel}>主观反馈</div>
-                        <div className={styles.kvValue}>
-                          {readHistoryString(state.selectedHistoryDetail.feedback, 'manual_feedback') || '未填写'}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className={styles.panelHint}>当前任务还没有反馈数据。</div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className={styles.emptyState}>
-                {state.isHistoryLoading ? '正在加载历史链路…' : '从左侧选择一条历史任务查看完整链路。'}
-              </div>
-            )}
-          </section>
-        </section>
       </div>
     </main>
   );

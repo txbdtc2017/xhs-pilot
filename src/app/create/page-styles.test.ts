@@ -16,3 +16,7 @@ test('create page uses stronger color separation for hero, panel, and field head
   assert.match(createPageStyles, /\.panelTitle\s*\{[^}]*color:\s*var\(--create-heading-color\);/s);
   assert.match(createPageStyles, /\.fieldLabel\s*\{[^}]*color:\s*var\(--create-label-color\);/s);
 });
+
+test('generation log panel keeps a fixed-height scroll area instead of expanding the page indefinitely', () => {
+  assert.match(createPageStyles, /\.logTimeline\s*\{[^}]*max-height:\s*420px;[^}]*overflow-y:\s*auto;/s);
+});

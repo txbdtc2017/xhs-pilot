@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { href: '/', label: '资产总览' },
   { href: '/samples', label: '内容档案' },
   { href: '/create', label: '创作工作台' },
+  { href: '/history', label: '历史任务' },
   { href: '/styles', label: '风格集合' },
 ];
 

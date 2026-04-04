@@ -74,7 +74,6 @@ export async function generateStructuredJsonText<T>(params: {
   validate: Validator<T>;
   label: string;
   temperature?: number;
-  maxOutputTokens?: number;
   abortSignal?: AbortSignal;
 }): Promise<T> {
   try {
@@ -92,7 +91,6 @@ export async function generateStructuredJsonText<T>(params: {
         JSON.stringify(params.schema, null, 2),
       ].join('\n'),
       temperature: params.temperature ?? 0,
-      maxOutputTokens: params.maxOutputTokens,
       maxRetries: 3,
       abortSignal: params.abortSignal,
     });

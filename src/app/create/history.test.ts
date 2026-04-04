@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  buildCreateImagesHref,
+  buildCreatePublishHref,
   buildHistoryTaskHref,
   fetchHistoryTaskDetail,
   fetchHistoryTasks,
@@ -100,8 +102,24 @@ test('fetchHistoryTaskDetail forwards the selected output id when switching hist
   });
 });
 
-test('normalizeHistoryTaskId and buildHistoryTaskHref support deep-linking into /create', () => {
+test('normalizeHistoryTaskId and buildHistoryTaskHref support deep-linking into /history', () => {
   assert.equal(normalizeHistoryTaskId(' task-1 '), 'task-1');
   assert.equal(normalizeHistoryTaskId('   '), null);
-  assert.equal(buildHistoryTaskHref('task-1'), '/create?taskId=task-1');
+  assert.equal(buildHistoryTaskHref('task-1'), '/history?taskId=task-1');
+});
+
+test('buildCreateImagesHref and buildCreatePublishHref preserve task and output context', () => {
+  assert.equal(buildCreateImagesHref(), '/create/images');
+  assert.equal(buildCreateImagesHref('task-1'), '/create/images?taskId=task-1');
+  assert.equal(
+    buildCreateImagesHref('task-1', 'output-2'),
+    '/create/images?taskId=task-1&outputId=output-2',
+  );
+
+  assert.equal(buildCreatePublishHref(), '/create/publish');
+  assert.equal(buildCreatePublishHref('task-1'), '/create/publish?taskId=task-1');
+  assert.equal(
+    buildCreatePublishHref('task-1', 'output-2'),
+    '/create/publish?taskId=task-1&outputId=output-2',
+  );
 });

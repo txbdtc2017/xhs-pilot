@@ -175,7 +175,6 @@ function createDefaultStrategyDependencies(): StrategyDependencies {
           validate: isTaskUnderstandingResult,
           label: '任务理解',
           temperature: 0,
-          maxOutputTokens: 400,
           abortSignal,
         });
       }
@@ -223,7 +222,6 @@ function createDefaultStreamStrategyDependencies(): StreamStrategyDependencies {
             validate: isStrategyResult,
             label: '策略生成',
             temperature: 0.2,
-            maxOutputTokens: 220,
             abortSignal,
           }).then((object) => object as unknown as Record<string, unknown>),
         );

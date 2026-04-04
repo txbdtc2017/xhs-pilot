@@ -71,6 +71,32 @@
   line-height: 1.6;
 }
 
+.studioTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.studioTab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(78, 61, 45, 0.12);
+  background: rgba(255, 252, 247, 0.9);
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.studioTabActive {
+  border-color: rgba(180, 35, 53, 0.32);
+  background: rgba(180, 35, 53, 0.08);
+  color: var(--color-primary);
+}
+
 .composerPanel {
   gap: 16px;
 }
@@ -380,6 +406,9 @@
 .logTimeline {
   display: grid;
   gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .logRow {
@@ -429,6 +458,12 @@
 .logMessage {
   line-height: 1.65;
   color: var(--color-text-primary);
+}
+
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .emptyState {
@@ -662,6 +697,11 @@
 
   .composerActions {
     grid-template-columns: 1fr;
+  }
+
+  .studioTabs,
+  .ctaRow {
+    flex-direction: column;
   }
 
   .historyTaskHeader,
