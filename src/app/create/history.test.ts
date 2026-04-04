@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   buildHistoryTaskHref,
+  deleteHistoryTask,
   fetchHistoryTaskDetail,
   fetchHistoryTasks,
   normalizeHistoryTaskId,
@@ -19,6 +20,7 @@ test('fetchHistoryTasks loads recent generation tasks from the existing history 
           status: 'completed',
           reference_mode: 'referenced',
           created_at: '2026-03-22T10:00:00.000Z',
+          can_delete: true,
         },
       ],
       total: 1,
@@ -30,6 +32,7 @@ test('fetchHistoryTasks loads recent generation tasks from the existing history 
 
   assert.equal(tasks.length, 1);
   assert.equal(tasks[0]?.id, 'task-1');
+  assert.equal(tasks[0]?.can_delete, true);
 });
 
 test('fetchHistoryTaskDetail loads the selected task detail from the existing detail endpoint', async () => {
@@ -104,4 +107,25 @@ test('normalizeHistoryTaskId and buildHistoryTaskHref support deep-linking into 
   assert.equal(normalizeHistoryTaskId(' task-1 '), 'task-1');
   assert.equal(normalizeHistoryTaskId('   '), null);
   assert.equal(buildHistoryTaskHref('task-1'), '/create?taskId=task-1');
+});
+
+test('deleteHistoryTask sends DELETE to the generation task detail route', async () => {
+  await deleteHistoryTask('task-1', async (input, init) => {
+    assert.equal(input, '/api/generate/task-1');
+    assert.equal(init?.method, 'DELETE');
+
+    return new Response(null, { status: 204 });
+  });
+});
+
+test('deleteHistoryTask surfaces backend conflict messages', async () => {
+  await assert.rejects(
+    deleteHistoryTask('task-1', async () => new Response(JSON.stringify({
+      error: 'Task still has active image jobs and cannot be deleted',
+    }), {
+      status: 409,
+      headers: { 'Content-Type': 'application/json' },
+    })),
+    /Task still has active image jobs and cannot be deleted/,
+  );
 });

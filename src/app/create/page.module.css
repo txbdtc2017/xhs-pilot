@@ -468,6 +468,11 @@
   background: linear-gradient(180deg, rgba(253, 247, 242, 0.98), rgba(255, 252, 247, 0.98));
 }
 
+.historyTaskCard {
+  display: grid;
+  gap: 10px;
+}
+
 .historyTaskHeader {
   display: flex;
   align-items: flex-start;
@@ -487,6 +492,24 @@
   gap: 8px 12px;
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+
+.historyTaskActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.deleteInlineWarning {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(179, 59, 69, 0.2);
+  background: rgba(179, 59, 69, 0.06);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .errorBox {
@@ -510,6 +533,75 @@
 .secondaryButton {
   padding: 11px 14px;
   font-weight: 600;
+}
+
+.subtleButton,
+.deleteButton,
+.dangerButton {
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.subtleButton,
+.deleteButton {
+  border: 1px solid rgba(78, 61, 45, 0.12);
+  background: rgba(255, 252, 247, 0.96);
+  color: var(--color-text-secondary);
+}
+
+.deleteButton:disabled,
+.subtleButton:disabled,
+.dangerButton:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.dangerButton {
+  border: 1px solid rgba(179, 59, 69, 0.28);
+  background: rgba(179, 59, 69, 0.12);
+  color: var(--color-error);
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(26, 18, 12, 0.48);
+  backdrop-filter: blur(6px);
+  z-index: 40;
+}
+
+.modalCard {
+  width: min(100%, 520px);
+  border-radius: 24px;
+  border: 1px solid rgba(78, 61, 45, 0.14);
+  background: linear-gradient(180deg, rgba(255, 253, 249, 0.98), rgba(249, 243, 236, 0.98));
+  box-shadow: 0 24px 64px rgba(26, 18, 12, 0.2);
+}
+
+.modalBody {
+  display: grid;
+  gap: 12px;
+  padding: 24px 24px 18px;
+}
+
+.modalCopy {
+  display: grid;
+  gap: 10px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 24px 24px;
 }
 
 .versionTabs {
@@ -679,12 +771,20 @@
   .imagePageActions {
     justify-content: stretch;
   }
+
+  .historyTaskActions,
+  .modalActions {
+    flex-direction: column;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .historyTaskButton,
   .submitButton,
   .secondaryButton,
+  .subtleButton,
+  .deleteButton,
+  .dangerButton,
   .versionButton,
   .toggleButton,
   .assetButton,
