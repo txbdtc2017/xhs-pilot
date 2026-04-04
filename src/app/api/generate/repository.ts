@@ -2,6 +2,7 @@ import { query, queryOne } from '@/lib/db';
 import type { GenerationOutput } from '@/agents/generation';
 import type { StrategyResult } from '@/agents/schemas/strategy';
 import type { TaskInput, TaskReferencesSelection } from '@/agents/strategy';
+import type { TaskRuntimePayload } from '@/lib/generation-lifecycle';
 import { imageGenerationRepository, type ImageGenerationJobRow, type ImagePlanDetail, type OutputVersionSummary } from '@/app/api/image-generation/repository';
 
 export interface TaskRow {
@@ -14,8 +15,29 @@ export interface TaskRow {
   need_cover_suggestion: boolean | null;
   style_profile_id: string | null;
   status: string;
+  current_step: string | null;
   reference_mode: string | null;
+  started_at: string | null;
+  last_progress_at: string | null;
+  last_heartbeat_at: string | null;
+  stalled_at: string | null;
+  failed_at: string | null;
+  stalled_reason: string | null;
+  failure_reason: string | null;
   created_at: string;
+}
+
+export interface UpdateTaskPatch {
+  status?: string;
+  currentStep?: string | null;
+  referenceMode?: string | null;
+  startedAt?: string | null;
+  lastProgressAt?: string | null;
+  lastHeartbeatAt?: string | null;
+  stalledAt?: string | null;
+  failedAt?: string | null;
+  stalledReason?: string | null;
+  failureReason?: string | null;
 }
 
 export interface GetTaskHistoryParams {
@@ -36,7 +58,7 @@ export async function createTask(input: TaskInput): Promise<{ id: string }> {
         style_profile_id,
         status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued')
       RETURNING id
     `,
     [
@@ -59,17 +81,67 @@ export async function createTask(input: TaskInput): Promise<{ id: string }> {
 
 export async function updateTask(
   taskId: string,
-  patch: { status: string; referenceMode?: string },
+  patch: UpdateTaskPatch,
 ): Promise<void> {
+  const assignments: string[] = [];
+  const values: unknown[] = [taskId];
+
+  const appendAssignment = (column: string, value: unknown) => {
+    values.push(value);
+    assignments.push(`${column} = $${values.length}`);
+  };
+
+  if (patch.status !== undefined) {
+    appendAssignment('status', patch.status);
+  }
+
+  if (patch.currentStep !== undefined) {
+    appendAssignment('current_step', patch.currentStep);
+  }
+
+  if (patch.referenceMode !== undefined) {
+    appendAssignment('reference_mode', patch.referenceMode);
+  }
+
+  if (patch.startedAt !== undefined) {
+    appendAssignment('started_at', patch.startedAt);
+  }
+
+  if (patch.lastProgressAt !== undefined) {
+    appendAssignment('last_progress_at', patch.lastProgressAt);
+  }
+
+  if (patch.lastHeartbeatAt !== undefined) {
+    appendAssignment('last_heartbeat_at', patch.lastHeartbeatAt);
+  }
+
+  if (patch.stalledAt !== undefined) {
+    appendAssignment('stalled_at', patch.stalledAt);
+  }
+
+  if (patch.failedAt !== undefined) {
+    appendAssignment('failed_at', patch.failedAt);
+  }
+
+  if (patch.stalledReason !== undefined) {
+    appendAssignment('stalled_reason', patch.stalledReason);
+  }
+
+  if (patch.failureReason !== undefined) {
+    appendAssignment('failure_reason', patch.failureReason);
+  }
+
+  if (assignments.length === 0) {
+    return;
+  }
+
   await query(
     `
       UPDATE generation_tasks
-      SET
-        status = $2,
-        reference_mode = COALESCE($3, reference_mode)
+      SET ${assignments.join(', ')}
       WHERE id = $1
     `,
-    [taskId, patch.status, patch.referenceMode ?? null],
+    values,
   );
 }
 
@@ -197,6 +269,7 @@ export async function getTaskDetail(
   options?: { selectedOutputId?: string | null },
 ): Promise<{
   task: TaskRow;
+  runtime: TaskRuntimePayload;
   strategy: Record<string, unknown> | null;
   references: Array<Record<string, unknown>>;
   output_versions: OutputVersionSummary[];
@@ -219,7 +292,15 @@ export async function getTaskDetail(
         need_cover_suggestion,
         style_profile_id,
         status,
+        current_step,
         reference_mode,
+        started_at,
+        last_progress_at,
+        last_heartbeat_at,
+        stalled_at,
+        failed_at,
+        stalled_reason,
+        failure_reason,
         created_at
       FROM generation_tasks
       WHERE id = $1
@@ -318,8 +399,21 @@ export async function getTaskDetail(
     [taskId],
   );
 
+  const runtime: TaskRuntimePayload = {
+    lifecycle_state: task.status as TaskRuntimePayload['lifecycle_state'],
+    current_step: task.current_step as TaskRuntimePayload['current_step'],
+    started_at: task.started_at,
+    last_progress_at: task.last_progress_at,
+    last_heartbeat_at: task.last_heartbeat_at,
+    stalled_at: task.stalled_at,
+    failed_at: task.failed_at,
+    stalled_reason: task.stalled_reason,
+    failure_reason: task.failure_reason,
+  };
+
   return {
     task,
+    runtime,
     strategy,
     references,
     output_versions: outputVersions,

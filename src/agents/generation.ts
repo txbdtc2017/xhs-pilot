@@ -36,6 +36,7 @@ export interface GenerationDependencies {
   streamGenerationText: (params: {
     system: string;
     prompt: string;
+    abortSignal?: AbortSignal;
   }) => ReturnType<typeof streamText>;
 }
 
@@ -75,13 +76,14 @@ function parseCoverCopies(section: string): CoverCopy[] {
 
 function createDefaultGenerationDependencies(): GenerationDependencies {
   return {
-    streamGenerationText: ({ system, prompt }) =>
+    streamGenerationText: ({ system, prompt, abortSignal }) =>
       streamText({
         model: llmGeneration(process.env.LLM_MODEL_GENERATION || 'gpt-4o'),
         system,
         prompt,
         temperature: 0.7,
         maxRetries: 3,
+        abortSignal,
       }),
   };
 }
@@ -209,9 +211,11 @@ export async function streamGeneratedMarkdown(
 export function startGenerationTextStream(
   input: GenerationPromptInput,
   dependencies: GenerationDependencies = createDefaultGenerationDependencies(),
+  abortSignal?: AbortSignal,
 ) {
   return dependencies.streamGenerationText({
     system: GENERATION_SYSTEM_PROMPT,
     prompt: buildGenerationPrompt(input),
+    abortSignal,
   });
 }

@@ -3,8 +3,6 @@ import type { JSONSchema7 } from 'json-schema';
 import { isKimiCodingAnthropicBaseUrl } from '@/lib/anthropic-provider-compat';
 import { llmAnalysis } from '@/lib/llm';
 
-const STRUCTURED_OUTPUT_TIMEOUT_MS = 30_000;
-
 type Validator<T> = (value: unknown) => value is T;
 
 export function shouldUseTextStructuredOutputFallback(
@@ -77,10 +75,8 @@ export async function generateStructuredJsonText<T>(params: {
   label: string;
   temperature?: number;
   maxOutputTokens?: number;
+  abortSignal?: AbortSignal;
 }): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), STRUCTURED_OUTPUT_TIMEOUT_MS);
-
   try {
     const { text } = await generateText({
       model: llmAnalysis(params.modelId),
@@ -98,18 +94,18 @@ export async function generateStructuredJsonText<T>(params: {
       temperature: params.temperature ?? 0,
       maxOutputTokens: params.maxOutputTokens,
       maxRetries: 3,
-      abortSignal: controller.signal,
+      abortSignal: params.abortSignal,
     });
 
     return await parseStructuredJsonText(text, params.validate, params.label);
   } catch (error) {
-    if (controller.signal.aborted) {
-      throw new Error(`${params.label} 超时，超过 30 秒仍未返回。`);
+    if (params.abortSignal?.aborted) {
+      throw new Error(
+        `${params.label} 已停止：${params.abortSignal.reason instanceof Error ? params.abortSignal.reason.message : String(params.abortSignal.reason ?? '任务被取消')}`,
+      );
     }
 
     throw error;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

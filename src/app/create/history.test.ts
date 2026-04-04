@@ -37,6 +37,17 @@ test('fetchHistoryTaskDetail loads the selected task detail from the existing de
     assert.equal(input, '/api/generate/task-1');
     return new Response(JSON.stringify({
       task: { id: 'task-1', topic: '历史任务一', status: 'completed' },
+      runtime: {
+        lifecycle_state: 'completed',
+        current_step: 'persisting',
+        started_at: '2026-03-31T00:00:00.000Z',
+        last_progress_at: '2026-03-31T00:00:09.000Z',
+        last_heartbeat_at: '2026-03-31T00:00:09.000Z',
+        stalled_at: null,
+        failed_at: null,
+        stalled_reason: null,
+        failure_reason: null,
+      },
       strategy: { strategy_summary: '策略摘要' },
       references: [{ sample_id: 'sample-1', title: '参考样本' }],
       output_versions: [],
@@ -53,6 +64,7 @@ test('fetchHistoryTaskDetail loads the selected task detail from the existing de
   });
 
   assert.equal(detail.task.id, 'task-1');
+  assert.equal(detail.runtime.lifecycle_state, 'completed');
   assert.equal(detail.references[0]?.title, '参考样本');
 });
 
@@ -61,6 +73,17 @@ test('fetchHistoryTaskDetail forwards the selected output id when switching hist
     assert.equal(input, '/api/generate/task-1?outputId=output-2');
     return new Response(JSON.stringify({
       task: { id: 'task-1', topic: '历史任务一', status: 'completed' },
+      runtime: {
+        lifecycle_state: 'completed',
+        current_step: 'persisting',
+        started_at: '2026-03-31T00:00:00.000Z',
+        last_progress_at: '2026-03-31T00:00:09.000Z',
+        last_heartbeat_at: '2026-03-31T00:00:09.000Z',
+        stalled_at: null,
+        failed_at: null,
+        stalled_reason: null,
+        failure_reason: null,
+      },
       strategy: null,
       references: [],
       output_versions: [],

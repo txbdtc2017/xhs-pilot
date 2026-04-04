@@ -5,6 +5,7 @@ import {
   applyStreamEvent,
   createInitialCreateState,
   createPageReducer,
+  type TaskRuntimePayload,
 } from './state';
 
 function createGenerationComplete() {
@@ -33,6 +34,17 @@ function createHistoryDetail() {
       status: 'completed',
       reference_mode: 'referenced',
     },
+    runtime: {
+      lifecycle_state: 'completed',
+      current_step: 'persisting',
+      started_at: '2026-03-31T00:00:00.000Z',
+      last_progress_at: '2026-03-31T00:00:09.000Z',
+      last_heartbeat_at: '2026-03-31T00:00:09.000Z',
+      stalled_at: null,
+      failed_at: null,
+      stalled_reason: null,
+      failure_reason: null,
+    } satisfies TaskRuntimePayload,
     strategy: {
       strategy_summary: '策略摘要',
       title_strategy: '结果先行',
@@ -184,6 +196,10 @@ test('applyStreamEvent updates task understanding, references, strategy, and gen
 test('applyStreamEvent finalizes outputs and stores task id on done', () => {
   let state = createPageReducer(createInitialCreateState(), { type: 'submit_started' });
   state = applyStreamEvent(state, {
+    event: 'task_created',
+    data: { task_id: 'task-1' },
+  });
+  state = applyStreamEvent(state, {
     event: 'generation_complete',
     data: createGenerationComplete(),
   });
@@ -195,6 +211,7 @@ test('applyStreamEvent finalizes outputs and stores task id on done', () => {
   assert.equal(state.isSubmitting, false);
   assert.equal(state.step, 'completed');
   assert.equal(state.taskId, 'task-1');
+  assert.equal(state.lifecycleState, 'completed');
   assert.equal(state.outputs?.titles[0], '标题一');
 });
 
@@ -221,6 +238,25 @@ test('applyStreamEvent appends readable runtime logs and avoids one row per gene
     now: '2026-04-04T10:00:00.000Z',
   });
 
+  state = applyStreamEvent(state, {
+    event: 'task_created',
+    data: { task_id: 'task-1' },
+  }, '2026-04-04T10:00:00.500Z');
+  state = applyStreamEvent(state, {
+    event: 'lifecycle',
+    data: {
+      lifecycle_state: 'running',
+      current_step: 'understanding',
+      started_at: '2026-04-04T10:00:00.000Z',
+      last_progress_at: '2026-04-04T10:00:00.000Z',
+      last_heartbeat_at: '2026-04-04T10:00:00.500Z',
+      stalled_at: null,
+      failed_at: null,
+      stalled_reason: null,
+      failure_reason: null,
+      task_id: 'task-1',
+    },
+  }, '2026-04-04T10:00:00.500Z');
   state = applyStreamEvent(state, {
     event: 'status',
     data: {
@@ -257,9 +293,94 @@ test('applyStreamEvent appends readable runtime logs and avoids one row per gene
 
   assert.equal(state.lastServerEventAt, '2026-04-04T10:00:05.000Z');
   assert.equal(state.currentStepStartedAt, '2026-04-04T10:00:04.000Z');
+  assert.equal(state.taskId, 'task-1');
+  assert.equal(state.runtime?.last_heartbeat_at, '2026-04-04T10:00:00.500Z');
   assert.deepEqual(
     state.generationLogs.map((entry) => entry.message),
-    ['开始任务理解', '任务理解完成', '收到首个策略快照', '正文流已开始'],
+    ['任务已创建，可通过 URL 继续查看', '开始任务理解', '任务理解完成', '收到首个策略快照', '正文流已开始'],
+  );
+});
+
+test('applyStreamEvent tracks stalled lifecycle transitions without logging heartbeat noise', () => {
+  let state = createPageReducer(createInitialCreateState(), {
+    type: 'submit_started',
+    now: '2026-04-04T10:00:00.000Z',
+  });
+
+  state = applyStreamEvent(state, {
+    event: 'task_created',
+    data: { task_id: 'task-1' },
+  }, '2026-04-04T10:00:00.100Z');
+  state = applyStreamEvent(state, {
+    event: 'lifecycle',
+    data: {
+      lifecycle_state: 'running',
+      current_step: 'strategizing',
+      started_at: '2026-04-04T10:00:00.000Z',
+      last_progress_at: '2026-04-04T10:00:05.000Z',
+      last_heartbeat_at: '2026-04-04T10:00:05.000Z',
+      stalled_at: null,
+      failed_at: null,
+      stalled_reason: null,
+      failure_reason: null,
+      task_id: 'task-1',
+    },
+  }, '2026-04-04T10:00:05.000Z');
+  state = applyStreamEvent(state, {
+    event: 'lifecycle',
+    data: {
+      lifecycle_state: 'running',
+      current_step: 'strategizing',
+      started_at: '2026-04-04T10:00:00.000Z',
+      last_progress_at: '2026-04-04T10:00:05.000Z',
+      last_heartbeat_at: '2026-04-04T10:00:12.000Z',
+      stalled_at: null,
+      failed_at: null,
+      stalled_reason: null,
+      failure_reason: null,
+      task_id: 'task-1',
+    },
+  }, '2026-04-04T10:00:12.000Z');
+  state = applyStreamEvent(state, {
+    event: 'lifecycle',
+    data: {
+      lifecycle_state: 'stalled',
+      current_step: 'strategizing',
+      started_at: '2026-04-04T10:00:00.000Z',
+      last_progress_at: '2026-04-04T10:00:05.000Z',
+      last_heartbeat_at: '2026-04-04T10:00:20.000Z',
+      stalled_at: '2026-04-04T10:00:20.000Z',
+      failed_at: null,
+      stalled_reason: 'strategizing 阶段超过允许的无进展窗口',
+      failure_reason: null,
+      task_id: 'task-1',
+    },
+  }, '2026-04-04T10:00:20.000Z');
+  state = applyStreamEvent(state, {
+    event: 'lifecycle',
+    data: {
+      lifecycle_state: 'running',
+      current_step: 'strategizing',
+      started_at: '2026-04-04T10:00:00.000Z',
+      last_progress_at: '2026-04-04T10:00:24.000Z',
+      last_heartbeat_at: '2026-04-04T10:00:24.000Z',
+      stalled_at: null,
+      failed_at: null,
+      stalled_reason: null,
+      failure_reason: null,
+      task_id: 'task-1',
+    },
+  }, '2026-04-04T10:00:24.000Z');
+
+  assert.equal(state.lifecycleState, 'running');
+  assert.equal(state.runtime?.last_heartbeat_at, '2026-04-04T10:00:24.000Z');
+  assert.deepEqual(
+    state.generationLogs.map((entry) => entry.message),
+    [
+      '任务已创建，可通过 URL 继续查看',
+      '任务进入 stalled：strategizing 阶段超过允许的无进展窗口',
+      '任务已恢复运行',
+    ],
   );
 });
 

@@ -1,6 +1,6 @@
 'use client'
 
-import type { CreateStep, GenerationLogEntry } from './state';
+import type { CreateLifecycleState, CreateStep, GenerationLogEntry, TaskRuntimePayload } from './state';
 
 export type GenerationLogPanelClassName =
   | 'panel'
@@ -33,11 +33,12 @@ interface GenerationLogPanelProps {
   classes: GenerationLogPanelClasses;
   isExpanded: boolean;
   taskId: string | null;
+  lifecycleState: CreateLifecycleState;
   currentStep: CreateStep;
+  runtime: TaskRuntimePayload | null;
   isSubmitting: boolean;
   submitStartedAt: string | null;
   currentStepStartedAt: string | null;
-  lastServerEventAt: string | null;
   clockNow: string | null;
   streamClosedUnexpectedly: boolean;
   logs: GenerationLogEntry[];
@@ -83,25 +84,30 @@ export function GenerationLogPanel({
   classes,
   isExpanded,
   taskId,
+  lifecycleState,
   currentStep,
+  runtime,
   isSubmitting,
   submitStartedAt,
   currentStepStartedAt,
-  lastServerEventAt,
   clockNow,
   streamClosedUnexpectedly,
   logs,
   onToggle,
 }: GenerationLogPanelProps) {
-  const summaryText = isSubmitting
-    ? '生成进行中'
-    : currentStep === 'failed'
+  const summaryText = lifecycleState === 'stalled'
+    ? '任务 stalled'
+    : lifecycleState === 'failed' || currentStep === 'failed'
       ? '任务失败'
-      : currentStep === 'completed'
+      : lifecycleState === 'completed' || currentStep === 'completed'
         ? '任务完成'
-        : streamClosedUnexpectedly
-          ? '流异常结束'
-          : '等待新任务';
+        : lifecycleState === 'queued'
+          ? '等待执行'
+          : isSubmitting
+            ? '生成进行中'
+            : streamClosedUnexpectedly
+              ? '流异常结束'
+              : '等待新任务';
 
   return (
     <section className={`${classes.panel} ${classes.logPanel}`}>
@@ -129,8 +135,12 @@ export function GenerationLogPanel({
               <div className={classes.logMetaValue}>{taskId ?? '尚未返回'}</div>
             </div>
             <div className={classes.logMetaCard}>
+              <div className={classes.logMetaLabel}>生命周期</div>
+              <div className={classes.logMetaValue}>{lifecycleState}</div>
+            </div>
+            <div className={classes.logMetaCard}>
               <div className={classes.logMetaLabel}>当前阶段</div>
-              <div className={classes.logMetaValue}>{currentStep}</div>
+              <div className={classes.logMetaValue}>{runtime?.current_step ?? currentStep}</div>
             </div>
             <div className={classes.logMetaCard}>
               <div className={classes.logMetaLabel}>当前阶段耗时</div>
@@ -141,9 +151,55 @@ export function GenerationLogPanel({
               <div className={classes.logMetaValue}>{formatDuration(submitStartedAt, clockNow)}</div>
             </div>
             <div className={classes.logMetaCard}>
-              <div className={classes.logMetaLabel}>距上次服务端事件</div>
-              <div className={classes.logMetaValue}>{formatDuration(lastServerEventAt, clockNow)}</div>
+              <div className={classes.logMetaLabel}>距上次业务进展</div>
+              <div className={classes.logMetaValue}>{formatDuration(runtime?.last_progress_at ?? null, clockNow)}</div>
             </div>
+            <div className={classes.logMetaCard}>
+              <div className={classes.logMetaLabel}>距上次心跳</div>
+              <div className={classes.logMetaValue}>{formatDuration(runtime?.last_heartbeat_at ?? null, clockNow)}</div>
+            </div>
+            {runtime?.stalled_reason || runtime?.failure_reason ? (
+              <div className={classes.logMetaCard}>
+                <div className={classes.logMetaLabel}>诊断</div>
+                <div className={classes.logMetaValue}>{runtime.failure_reason ?? runtime.stalled_reason}</div>
+              </div>
+            ) : null}
+            {runtime?.started_at ? (
+              <div className={classes.logMetaCard}>
+                <div className={classes.logMetaLabel}>启动时间</div>
+                <div className={classes.logMetaValue}>{formatTimestamp(runtime.started_at)}</div>
+              </div>
+            ) : null}
+            {runtime?.last_progress_at ? (
+              <div className={classes.logMetaCard}>
+                <div className={classes.logMetaLabel}>最近进展</div>
+                <div className={classes.logMetaValue}>{formatTimestamp(runtime.last_progress_at)}</div>
+              </div>
+            ) : null}
+            {runtime?.last_heartbeat_at ? (
+              <div className={classes.logMetaCard}>
+                <div className={classes.logMetaLabel}>最近心跳</div>
+                <div className={classes.logMetaValue}>{formatTimestamp(runtime.last_heartbeat_at)}</div>
+              </div>
+            ) : null}
+            {runtime?.failed_at ? (
+              <div className={classes.logMetaCard}>
+                <div className={classes.logMetaLabel}>失败时间</div>
+                <div className={classes.logMetaValue}>{formatTimestamp(runtime.failed_at)}</div>
+              </div>
+            ) : null}
+            {runtime?.stalled_at ? (
+              <div className={classes.logMetaCard}>
+                <div className={classes.logMetaLabel}>进入 stalled</div>
+                <div className={classes.logMetaValue}>{formatTimestamp(runtime.stalled_at)}</div>
+              </div>
+            ) : null}
+            {streamClosedUnexpectedly ? (
+              <div className={classes.logMetaCard}>
+                <div className={classes.logMetaLabel}>连接状态</div>
+                <div className={classes.logMetaValue}>流异常结束</div>
+              </div>
+            ) : null}
           </div>
 
           {logs.length > 0 ? (

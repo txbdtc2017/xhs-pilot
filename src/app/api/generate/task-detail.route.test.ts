@@ -9,6 +9,17 @@ test('GET /api/generate/[taskId] returns the persisted generation detail', async
       assert.equal(taskId, 'task-1');
       return {
         task: { id: 'task-1', topic: '主题一', status: 'completed' },
+        runtime: {
+          lifecycle_state: 'completed',
+          current_step: 'persisting',
+          started_at: '2026-03-31T00:00:00.000Z',
+          last_progress_at: '2026-03-31T00:00:09.000Z',
+          last_heartbeat_at: '2026-03-31T00:00:09.000Z',
+          stalled_at: null,
+          failed_at: null,
+          stalled_reason: null,
+          failure_reason: null,
+        },
         strategy: { strategy_summary: '策略摘要', cta_strategy: '引导收藏' },
         references: [{ sample_id: 'sample-1', reference_type: 'title' }],
         output_versions: [
@@ -37,6 +48,17 @@ test('GET /api/generate/[taskId] returns the persisted generation detail', async
 
   assert.deepEqual(payload, {
     task: { id: 'task-1', topic: '主题一', status: 'completed' },
+    runtime: {
+      lifecycle_state: 'completed',
+      current_step: 'persisting',
+      started_at: '2026-03-31T00:00:00.000Z',
+      last_progress_at: '2026-03-31T00:00:09.000Z',
+      last_heartbeat_at: '2026-03-31T00:00:09.000Z',
+      stalled_at: null,
+      failed_at: null,
+      stalled_reason: null,
+      failure_reason: null,
+    },
     strategy: { strategy_summary: '策略摘要', cta_strategy: '引导收藏' },
     references: [{ sample_id: 'sample-1', reference_type: 'title' }],
     output_versions: [
@@ -79,6 +101,17 @@ test('GET /api/generate/[taskId] forwards outputId when requesting a specific hi
       assert.deepEqual(options, { selectedOutputId: 'output-2' });
       return {
         task: { id: 'task-1', topic: '主题一', status: 'completed' },
+        runtime: {
+          lifecycle_state: 'completed',
+          current_step: 'persisting',
+          started_at: '2026-03-31T00:00:00.000Z',
+          last_progress_at: '2026-03-31T00:00:09.000Z',
+          last_heartbeat_at: '2026-03-31T00:00:09.000Z',
+          stalled_at: null,
+          failed_at: null,
+          stalled_reason: null,
+          failure_reason: null,
+        },
         strategy: null,
         references: [],
         output_versions: [],

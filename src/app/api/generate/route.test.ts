@@ -94,7 +94,7 @@ function createAsyncIterable<T>(values: T[]): AsyncIterable<T> {
 }
 
 test('POST /api/generate streams understanding, references, strategy, generation, and done events', async () => {
-  const statusUpdates: Array<{ taskId: string; status: string; referenceMode?: string }> = [];
+  const statusUpdates: Array<{ taskId: string; status?: string; currentStep?: string | null; referenceMode?: string }> = [];
   const saved: Record<string, unknown> = {};
   const taskUnderstanding = createTaskUnderstanding();
   const strategy = createStrategyResult();
@@ -102,7 +102,12 @@ test('POST /api/generate streams understanding, references, strategy, generation
   const POST = createGeneratePostHandler({
     createTask: async () => ({ id: 'task-1' }),
     updateTask: async (taskId, patch) => {
-      statusUpdates.push({ taskId, status: patch.status, referenceMode: patch.referenceMode });
+      statusUpdates.push({
+        taskId,
+        status: patch.status,
+        currentStep: patch.currentStep,
+        referenceMode: patch.referenceMode,
+      });
     },
     saveTaskReferences: async (_taskId, selection) => {
       saved.references = selection;
@@ -159,7 +164,17 @@ test('POST /api/generate streams understanding, references, strategy, generation
   assert.equal(response.headers.get('Content-Type'), 'text/event-stream');
 
   const events = await readSseEvents(response);
-  assert.deepEqual(events.map((event) => event.event), [
+  assert.equal(events[0]?.event, 'task_created');
+  assert.equal(events.at(-1)?.event, 'done');
+  assert.ok(events.some((event) =>
+    event.event === 'lifecycle'
+    && (event.data as Record<string, unknown>).lifecycle_state === 'running'
+    && (event.data as Record<string, unknown>).current_step === 'understanding'));
+  assert.ok(events.some((event) =>
+    event.event === 'lifecycle'
+    && (event.data as Record<string, unknown>).lifecycle_state === 'completed'));
+
+  assert.deepEqual(events.filter((event) => !['task_created', 'lifecycle'].includes(event.event)).map((event) => event.event), [
     'status',
     'task_understanding',
     'status',
@@ -176,13 +191,15 @@ test('POST /api/generate streams understanding, references, strategy, generation
     'done',
   ]);
 
-  assert.deepEqual(statusUpdates, [
-    { taskId: 'task-1', status: 'understanding', referenceMode: undefined },
-    { taskId: 'task-1', status: 'searching', referenceMode: undefined },
-    { taskId: 'task-1', status: 'strategizing', referenceMode: undefined },
-    { taskId: 'task-1', status: 'generating', referenceMode: undefined },
-    { taskId: 'task-1', status: 'completed', referenceMode: 'referenced' },
-  ]);
+  assert.ok(statusUpdates.some((update) =>
+    update.taskId === 'task-1'
+    && update.status === 'running'
+    && update.currentStep === 'understanding'));
+  assert.ok(statusUpdates.some((update) =>
+    update.taskId === 'task-1'
+    && update.status === 'completed'
+    && update.currentStep === 'persisting'
+    && update.referenceMode === 'referenced'));
 
   assert.deepEqual(saved.strategy, strategy);
   assert.ok(saved.references);
@@ -401,10 +418,26 @@ test('POST /api/generate marks task as failed when strategizing throws', async (
   }));
 
   const events = await readSseEvents(response);
+  const failedLifecycleEvent = events.find((event) =>
+    event.event === 'lifecycle'
+    && (event.data as Record<string, unknown>).lifecycle_state === 'failed');
+
   assert.equal(events.at(-1)?.event, 'error');
   assert.deepEqual(events.at(-1)?.data, {
     message: 'strategy failed',
     step: 'strategizing',
+  });
+  assert.deepEqual(failedLifecycleEvent?.data, {
+    current_step: 'strategizing',
+    failed_at: (failedLifecycleEvent?.data as Record<string, unknown>).failed_at,
+    failure_reason: 'strategy failed',
+    last_heartbeat_at: (failedLifecycleEvent?.data as Record<string, unknown>).last_heartbeat_at,
+    last_progress_at: (failedLifecycleEvent?.data as Record<string, unknown>).last_progress_at,
+    lifecycle_state: 'failed',
+    stalled_at: null,
+    stalled_reason: null,
+    started_at: (failedLifecycleEvent?.data as Record<string, unknown>).started_at,
+    task_id: 'task-fail-strategy',
   });
   assert.equal(statusUpdates.at(-1)?.status, 'failed');
 });

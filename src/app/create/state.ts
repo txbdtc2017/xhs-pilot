@@ -1,3 +1,7 @@
+import type { GenerationLifecycleState, TaskRuntimePayload } from '@/lib/generation-lifecycle';
+
+export type { TaskRuntimePayload };
+
 export interface CreateFormValues {
   topic: string;
   targetAudience: string;
@@ -179,6 +183,7 @@ export interface HistoryTaskDetail {
     reference_mode?: string | null;
     [key: string]: unknown;
   };
+  runtime: TaskRuntimePayload;
   strategy: Record<string, unknown> | null;
   references: Array<Record<string, unknown>>;
   output_versions: OutputVersionPayload[];
@@ -200,6 +205,7 @@ export type CreateStep =
   | 'failed';
 
 export type RuntimeLogStep = CreateStep | 'persisting';
+export type CreateLifecycleState = GenerationLifecycleState | 'idle';
 export type GenerationLogSource = 'client' | 'server' | 'system';
 
 export interface GenerationLogEntry {
@@ -220,7 +226,9 @@ export interface CreatePageState {
   isSubmitting: boolean;
   error: string | null;
   step: CreateStep;
+  lifecycleState: CreateLifecycleState;
   taskId: string | null;
+  runtime: TaskRuntimePayload | null;
   taskUnderstanding: TaskUnderstandingPayload | null;
   references: ReferencesPayload | null;
   strategySnapshot: StrategySnapshotPayload | null;
@@ -245,6 +253,8 @@ export interface CreatePageState {
 }
 
 export type CreateStreamEvent =
+  | { event: 'task_created'; data: { task_id: string } }
+  | { event: 'lifecycle'; data: TaskRuntimePayload & { task_id: string } }
   | { event: 'status'; data: { step: RuntimeLogStep; message: string } }
   | { event: 'task_understanding'; data: TaskUnderstandingPayload }
   | { event: 'references'; data: ReferencesPayload }
@@ -307,7 +317,9 @@ export function createInitialCreateState(): CreatePageState {
     isSubmitting: false,
     error: null,
     step: 'idle',
+    lifecycleState: 'idle',
     taskId: null,
+    runtime: null,
     taskUnderstanding: null,
     references: null,
     strategySnapshot: null,
@@ -416,6 +428,26 @@ function mapRuntimeStepToVisibleStep(
   }
 }
 
+function markRuntimeProgress(
+  state: CreatePageState,
+  at: string,
+  step: TaskRuntimePayload['current_step'],
+): CreatePageState {
+  if (!state.runtime) {
+    return state;
+  }
+
+  return {
+    ...state,
+    runtime: {
+      ...state.runtime,
+      current_step: step,
+      last_progress_at: at,
+      last_heartbeat_at: state.runtime.last_heartbeat_at ?? at,
+    },
+  };
+}
+
 function mergeImageAssets(
   assets: ImageAssetPayload[],
   selectedAsset: ImageAssetPayload,
@@ -459,11 +491,88 @@ export function applyStreamEvent(
   const nextState = applyServerEventMetadata(state, receivedAt);
 
   switch (event.event) {
+    case 'task_created':
+      return appendGenerationLog({
+        ...nextState,
+        taskId: event.data.task_id,
+      }, {
+        source: 'server',
+        event: 'task_created',
+        message: '任务已创建，可通过 URL 继续查看',
+        at: receivedAt,
+        step: state.step === 'idle' ? 'understanding' : state.step,
+      });
+    case 'lifecycle': {
+      const previousLifecycle = state.runtime?.lifecycle_state ?? state.lifecycleState;
+      const nextLifecycle = event.data.lifecycle_state;
+      const nextStep = event.data.current_step
+        ? mapRuntimeStepToVisibleStep(event.data.current_step, nextState.step)
+        : nextState.step;
+
+      let withRuntime: CreatePageState = {
+        ...nextState,
+        lifecycleState: nextLifecycle,
+        taskId: event.data.task_id,
+        runtime: {
+          lifecycle_state: event.data.lifecycle_state,
+          current_step: event.data.current_step,
+          started_at: event.data.started_at,
+          last_progress_at: event.data.last_progress_at,
+          last_heartbeat_at: event.data.last_heartbeat_at,
+          stalled_at: event.data.stalled_at,
+          failed_at: event.data.failed_at,
+          stalled_reason: event.data.stalled_reason,
+          failure_reason: event.data.failure_reason,
+        },
+      };
+
+      if (nextLifecycle === 'failed') {
+        withRuntime = {
+          ...updateVisibleStep(withRuntime, 'failed', receivedAt),
+          isSubmitting: false,
+          error: event.data.failure_reason ?? state.error,
+          isLogPanelExpanded: true,
+        };
+      } else if (nextLifecycle === 'completed') {
+        withRuntime = {
+          ...updateVisibleStep(withRuntime, 'completed', receivedAt),
+          isSubmitting: false,
+        };
+      } else {
+        withRuntime = updateVisibleStep(withRuntime, nextStep, receivedAt);
+      }
+
+      if (previousLifecycle !== 'stalled' && nextLifecycle === 'stalled') {
+        return appendGenerationLog(withRuntime, {
+          source: 'system',
+          event: 'lifecycle_stalled',
+          message: `任务进入 stalled：${event.data.stalled_reason ?? '当前阶段超过允许的无进展窗口'}`,
+          at: receivedAt,
+          step: event.data.current_step ?? undefined,
+          detail: event.data.stalled_reason ?? undefined,
+        });
+      }
+
+      if (previousLifecycle === 'stalled' && nextLifecycle === 'running') {
+        return appendGenerationLog(withRuntime, {
+          source: 'system',
+          event: 'lifecycle_recovered',
+          message: '任务已恢复运行',
+          at: receivedAt,
+          step: event.data.current_step ?? undefined,
+        });
+      }
+
+      return withRuntime;
+    }
     case 'status': {
       const visibleStep = mapRuntimeStepToVisibleStep(event.data.step, nextState.step);
 
       return appendGenerationLog(
-        updateVisibleStep(nextState, visibleStep, receivedAt),
+        updateVisibleStep({
+          ...nextState,
+          lifecycleState: nextState.lifecycleState === 'idle' ? 'running' : nextState.lifecycleState,
+        }, visibleStep, receivedAt),
         {
           source: 'server',
           event: 'status',
@@ -474,10 +583,11 @@ export function applyStreamEvent(
       );
     }
     case 'task_understanding':
-      return appendGenerationLog({
+      return appendGenerationLog(markRuntimeProgress({
         ...updateVisibleStep(nextState, 'understanding', receivedAt),
+        lifecycleState: nextState.lifecycleState === 'idle' ? 'running' : nextState.lifecycleState,
         taskUnderstanding: event.data,
-      }, {
+      }, receivedAt, 'understanding'), {
         source: 'server',
         event: 'task_understanding',
         message: '任务理解完成',
@@ -485,10 +595,11 @@ export function applyStreamEvent(
         step: 'understanding',
       });
     case 'references':
-      return appendGenerationLog({
+      return appendGenerationLog(markRuntimeProgress({
         ...updateVisibleStep(nextState, 'searching', receivedAt),
+        lifecycleState: nextState.lifecycleState === 'idle' ? 'running' : nextState.lifecycleState,
         references: event.data,
-      }, {
+      }, receivedAt, 'searching'), {
         source: 'server',
         event: 'references',
         message: '参考检索完成',
@@ -499,7 +610,8 @@ export function applyStreamEvent(
       const isFirstSnapshot = state.strategySnapshot == null;
       const becameFinal = Boolean(event.data.strategy_summary) && !state.strategySnapshot?.strategy_summary;
       let withSnapshot: CreatePageState = {
-        ...updateVisibleStep(nextState, 'strategizing', receivedAt),
+        ...markRuntimeProgress(updateVisibleStep(nextState, 'strategizing', receivedAt), receivedAt, 'strategizing'),
+        lifecycleState: nextState.lifecycleState === 'idle' ? 'running' : nextState.lifecycleState,
         strategySnapshot: {
           ...state.strategySnapshot,
           ...event.data,
@@ -531,7 +643,8 @@ export function applyStreamEvent(
     case 'generation_delta': {
       const shouldLogStart = state.step !== 'generating';
       let withText: CreatePageState = {
-        ...updateVisibleStep(nextState, 'generating', receivedAt),
+        ...markRuntimeProgress(updateVisibleStep(nextState, 'generating', receivedAt), receivedAt, 'generating'),
+        lifecycleState: nextState.lifecycleState === 'idle' ? 'running' : nextState.lifecycleState,
         generationText: `${state.generationText}${event.data.text}`,
       };
 
@@ -549,7 +662,8 @@ export function applyStreamEvent(
     }
     case 'generation_complete':
       return appendGenerationLog({
-        ...updateVisibleStep(nextState, 'completed', receivedAt),
+        ...markRuntimeProgress(updateVisibleStep(nextState, 'completed', receivedAt), receivedAt, 'persisting'),
+        lifecycleState: 'completed',
         isSubmitting: false,
         outputs: event.data,
       }, {
@@ -563,6 +677,7 @@ export function applyStreamEvent(
       return appendGenerationLog({
         ...updateVisibleStep(nextState, 'completed', receivedAt),
         isSubmitting: false,
+        lifecycleState: 'completed',
         taskId: event.data.task_id,
         streamClosedUnexpectedly: false,
       }, {
@@ -576,6 +691,7 @@ export function applyStreamEvent(
       return appendGenerationLog({
         ...updateVisibleStep(nextState, 'failed', receivedAt),
         isSubmitting: false,
+        lifecycleState: 'failed',
         error: event.data.message,
         isLogPanelExpanded: true,
       }, {
@@ -631,7 +747,9 @@ export function createPageReducer(
         isSubmitting: true,
         error: null,
         step: 'understanding',
+        lifecycleState: 'queued',
         taskId: null,
+        runtime: null,
         taskUnderstanding: null,
         references: null,
         strategySnapshot: null,
@@ -651,6 +769,7 @@ export function createPageReducer(
         ...state,
         isSubmitting: false,
         step: 'failed',
+        lifecycleState: 'failed',
         error: action.message,
         clockNow: createTimestamp(action.now),
         isLogPanelExpanded: true,
@@ -681,7 +800,7 @@ export function createPageReducer(
       }, {
         source: 'system',
         event: 'idle_warning',
-        message: '10 秒未收到新事件，仍在等待服务端返回',
+        message: '当前阶段长时间没有新的业务进展，仍在等待服务端返回',
         at: action.now,
         step: state.step,
       });
@@ -700,6 +819,7 @@ export function createPageReducer(
         ...state,
         isSubmitting: false,
         step: 'failed',
+        lifecycleState: 'failed',
         error: state.error ?? '事件流已提前关闭，请查看运行日志。',
         streamClosedUnexpectedly: true,
         isLogPanelExpanded: true,

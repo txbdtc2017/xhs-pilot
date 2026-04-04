@@ -73,8 +73,9 @@ export interface StrategyDependencies {
   generateTaskUnderstanding: (params: {
     system: string;
     prompt: string;
+    abortSignal?: AbortSignal;
   }) => Promise<TaskUnderstandingResult>;
-  createTaskEmbedding: (query: string) => Promise<number[]>;
+  createTaskEmbedding: (query: string, abortSignal?: AbortSignal) => Promise<number[]>;
   searchSimilarSamples: (params: SearchSimilarSamplesParams) => Promise<SimilarSample[]>;
   searchLexicalSamples: (params: SearchLexicalSamplesParams) => Promise<SimilarSample[]>;
   getSearchModeStatus: () => SearchModeStatus;
@@ -90,6 +91,7 @@ export interface StreamStrategyDependencies {
       referenceSelection: TaskReferencesSelection;
       referenceBlocks: ReferenceContextBlock[];
     };
+    abortSignal?: AbortSignal;
   }) => {
     partialObjectStream: AsyncIterable<Record<string, unknown>>;
     object: Promise<Record<string, unknown>>;
@@ -161,7 +163,7 @@ function buildCompactStrategyFallbackPrompt(input: {
 
 function createDefaultStrategyDependencies(): StrategyDependencies {
   return {
-    generateTaskUnderstanding: async ({ system, prompt }) => {
+    generateTaskUnderstanding: async ({ system, prompt, abortSignal }) => {
       const modelId = process.env.LLM_MODEL_ANALYSIS || 'gpt-4o';
 
       if (shouldUseTextStructuredOutputFallback()) {
@@ -174,6 +176,7 @@ function createDefaultStrategyDependencies(): StrategyDependencies {
           label: '任务理解',
           temperature: 0,
           maxOutputTokens: 400,
+          abortSignal,
         });
       }
 
@@ -184,15 +187,17 @@ function createDefaultStrategyDependencies(): StrategyDependencies {
         prompt,
         temperature: 0,
         maxRetries: 3,
+        abortSignal,
       });
 
       return object;
     },
-    createTaskEmbedding: async (query) => {
+    createTaskEmbedding: async (query, abortSignal) => {
       const { embedding } = await embed({
         model: llmEmbedding.textEmbeddingModel(process.env.EMBEDDING_MODEL || DEFAULT_EMBEDDING_MODEL),
         value: query,
         maxRetries: 3,
+        abortSignal,
       });
 
       return embedding;
@@ -205,7 +210,7 @@ function createDefaultStrategyDependencies(): StrategyDependencies {
 
 function createDefaultStreamStrategyDependencies(): StreamStrategyDependencies {
   return {
-    streamStrategyObject: ({ system, prompt, input }) => {
+    streamStrategyObject: ({ system, prompt, input, abortSignal }) => {
       const modelId = process.env.LLM_MODEL_ANALYSIS || 'gpt-4o';
 
       if (shouldUseTextStructuredOutputFallback()) {
@@ -219,6 +224,7 @@ function createDefaultStreamStrategyDependencies(): StreamStrategyDependencies {
             label: '策略生成',
             temperature: 0.2,
             maxOutputTokens: 220,
+            abortSignal,
           }).then((object) => object as unknown as Record<string, unknown>),
         );
       }
@@ -230,6 +236,7 @@ function createDefaultStreamStrategyDependencies(): StreamStrategyDependencies {
         prompt,
         temperature: 0.3,
         maxRetries: 3,
+        abortSignal,
       });
     },
   };
@@ -258,10 +265,12 @@ function createReferenceReason(referenceType: ReferenceType): string {
 export async function understandTask(
   input: TaskInput,
   dependencies: StrategyDependencies = createDefaultStrategyDependencies(),
+  abortSignal?: AbortSignal,
 ): Promise<TaskUnderstandingResult> {
   return dependencies.generateTaskUnderstanding({
     system: TASK_UNDERSTANDING_SYSTEM_PROMPT,
     prompt: buildTaskUnderstandingPrompt(input),
+    abortSignal,
   });
 }
 
@@ -521,11 +530,13 @@ export function startStrategyStream(
     referenceBlocks: ReferenceContextBlock[];
   },
   dependencies: StreamStrategyDependencies = createDefaultStreamStrategyDependencies(),
+  abortSignal?: AbortSignal,
 ) {
   return dependencies.streamStrategyObject({
     system: STRATEGY_SYSTEM_PROMPT,
     prompt: buildStrategyPrompt(input),
     input,
+    abortSignal,
   });
 }
 
@@ -533,6 +544,7 @@ export async function retrieveTaskReferencesFromUnderstanding(
   taskUnderstanding: TaskUnderstandingResult,
   dependencies: StrategyDependencies = createDefaultStrategyDependencies(),
   options: RetrieveTaskReferencesOptions = {},
+  abortSignal?: AbortSignal,
 ): Promise<RetrieveTaskReferencesResult> {
   const searchModeStatus = dependencies.getSearchModeStatus();
   const systemFilters = {
@@ -568,7 +580,10 @@ export async function retrieveTaskReferencesFromUnderstanding(
     };
   }
 
-  const taskEmbedding = await dependencies.createTaskEmbedding(taskUnderstanding.rewritten_query);
+  const taskEmbedding = await dependencies.createTaskEmbedding(
+    taskUnderstanding.rewritten_query,
+    abortSignal,
+  );
   const similarSamples = await dependencies.searchSimilarSamples({
     taskEmbedding,
     filters: systemFilters,

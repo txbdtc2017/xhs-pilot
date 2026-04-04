@@ -2,6 +2,7 @@
 
 import { Suspense, startTransition, useDeferredValue, useEffect, useReducer } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { getGenerationStepThresholds, type GenerationStep } from '@/lib/generation-lifecycle';
 import { createSseParser } from '@/lib/sse';
 import {
   buildHistoryTaskHref,
@@ -34,9 +35,13 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '请求失败';
 }
 
-function renderPill(step: string, currentStep: string) {
-  if (currentStep === 'failed') {
+function renderPill(step: string, currentStep: string, lifecycleState: string) {
+  if (lifecycleState === 'failed' || currentStep === 'failed') {
     return <span className={`${styles.pill} ${styles.pillError}`}>失败</span>;
+  }
+
+  if (lifecycleState === 'stalled') {
+    return <span className={`${styles.pill} ${styles.pillError}`}>stalled</span>;
   }
 
   if (step === currentStep) {
@@ -270,12 +275,17 @@ function CreatePageClient() {
       return;
     }
 
-    const referenceAt = state.lastServerEventAt ?? state.submitStartedAt;
-    if (!referenceAt) {
+    const quietStep = state.runtime?.current_step ?? (
+      ['understanding', 'searching', 'strategizing', 'generating'].includes(state.step)
+        ? state.step as GenerationStep
+        : null
+    );
+    const referenceAt = state.runtime?.last_progress_at ?? state.submitStartedAt;
+    if (!referenceAt || !quietStep) {
       return;
     }
 
-    const quietThresholdMs = 10_000;
+    const quietThresholdMs = getGenerationStepThresholds(quietStep).quietWarningMs;
     const elapsedMs = Date.now() - Date.parse(referenceAt);
     const delayMs = Math.max(0, quietThresholdMs - elapsedMs);
 
@@ -292,9 +302,10 @@ function CreatePageClient() {
   }, [
     state.idleWarningForStep,
     state.isSubmitting,
-    state.lastServerEventAt,
     state.step,
     state.submitStartedAt,
+    state.runtime?.current_step,
+    state.runtime?.last_progress_at,
   ]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -555,7 +566,7 @@ function CreatePageClient() {
             <article className={styles.stepCard}>
               <div className={styles.stepHeader}>
                 <div className={styles.stepTitle}>01 · 任务理解</div>
-                {renderPill('understanding', state.step)}
+                {renderPill('understanding', state.step, state.lifecycleState)}
               </div>
               {state.taskUnderstanding ? (
                 <div className={styles.kvList}>
@@ -582,7 +593,7 @@ function CreatePageClient() {
             <article className={styles.stepCard}>
               <div className={styles.stepHeader}>
                 <div className={styles.stepTitle}>02 · 参考检索</div>
-                {renderPill('searching', state.step)}
+                {renderPill('searching', state.step, state.lifecycleState)}
               </div>
               {state.references ? (
                 <div className={styles.list}>
@@ -628,7 +639,7 @@ function CreatePageClient() {
             <article className={styles.stepCard}>
               <div className={styles.stepHeader}>
                 <div className={styles.stepTitle}>03 · 策略形成</div>
-                {renderPill('strategizing', state.step)}
+                {renderPill('strategizing', state.step, state.lifecycleState)}
               </div>
               {state.strategySnapshot ? (
                 <div className={styles.kvList}>
@@ -665,13 +676,17 @@ function CreatePageClient() {
             <article className={styles.stepCard}>
               <div className={styles.stepHeader}>
                 <div className={styles.stepTitle}>04 · 成稿生成</div>
-                {renderPill(state.outputs ? 'completed' : 'generating', state.step)}
+                {renderPill(state.outputs ? 'completed' : 'generating', state.step, state.lifecycleState)}
               </div>
               <div className={styles.kvItem}>
                 <div className={styles.kvLabel}>状态</div>
                 <div className={styles.kvValue}>
                   {state.outputs
                     ? '结构化结果已落地'
+                    : state.lifecycleState === 'stalled'
+                      ? state.runtime?.stalled_reason ?? '当前阶段已进入 stalled'
+                      : state.lifecycleState === 'failed'
+                        ? state.error ?? '任务失败'
                     : state.isSubmitting
                       ? '正在消费 generation_delta'
                       : '等待开始'}
@@ -750,11 +765,12 @@ function CreatePageClient() {
           classes={styles as GenerationLogPanelClasses}
           isExpanded={state.isLogPanelExpanded}
           taskId={state.taskId}
+          lifecycleState={state.lifecycleState}
           currentStep={state.step}
+          runtime={state.runtime}
           isSubmitting={state.isSubmitting}
           submitStartedAt={state.submitStartedAt}
           currentStepStartedAt={state.currentStepStartedAt}
-          lastServerEventAt={state.lastServerEventAt}
           clockNow={state.clockNow}
           streamClosedUnexpectedly={state.streamClosedUnexpectedly}
           logs={state.generationLogs}
@@ -841,6 +857,26 @@ function CreatePageClient() {
                       {[state.selectedHistoryDetail.task.status, state.selectedHistoryDetail.reference_mode]
                         .filter(Boolean)
                         .join(' · ') || '未记录'}
+                    </div>
+                  </div>
+                  <div className={styles.kvItem}>
+                    <div className={styles.kvLabel}>当前阶段 / 最近进展</div>
+                    <div className={styles.kvValue}>
+                      {[
+                        state.selectedHistoryDetail.runtime.current_step ?? '未记录阶段',
+                        formatHistoryDate(state.selectedHistoryDetail.runtime.last_progress_at),
+                      ].join(' · ')}
+                    </div>
+                  </div>
+                  <div className={styles.kvItem}>
+                    <div className={styles.kvLabel}>最近心跳 / 异常原因</div>
+                    <div className={styles.kvValue}>
+                      {[
+                        formatHistoryDate(state.selectedHistoryDetail.runtime.last_heartbeat_at),
+                        state.selectedHistoryDetail.runtime.failure_reason
+                          ?? state.selectedHistoryDetail.runtime.stalled_reason
+                          ?? '未记录',
+                      ].join(' · ')}
                     </div>
                   </div>
                   <div className={styles.kvItem}>
