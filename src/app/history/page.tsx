@@ -140,13 +140,6 @@ function HistoryPageClient() {
     router.replace(buildHistoryTaskHref(preferredTaskId, outputId), { scroll: false });
   }
 
-  function handleDeleteArm(taskId: string) {
-    dispatchDelete({
-      type: 'delete_armed',
-      taskId,
-    });
-  }
-
   function handleDeleteCancel() {
     dispatchDelete({ type: 'delete_cancelled' });
   }
@@ -229,61 +222,45 @@ function HistoryPageClient() {
               <div className={styles.list}>
                 {tasks.map((task) => {
                   const isActive = task.id === preferredTaskId;
-                  const isArmed = task.id === deleteState.armedTaskId;
-                  const isPendingDelete = task.id === deleteState.pendingTaskId;
 
                   return (
-                    <article key={task.id} className={styles.historyTaskCard}>
-                      <button
-                        className={`${styles.historyTaskButton} ${isActive ? styles.historyTaskButtonActive : ''}`}
-                        type="button"
-                        onClick={() => handleTaskSelect(task.id)}
-                      >
-                        <div className={styles.historyTaskHeader}>
+                    <article
+                      key={task.id}
+                      className={`${styles.historyTaskCard} ${isActive ? styles.historyTaskCardActive : ''}`}
+                      onClick={() => handleTaskSelect(task.id)}
+                    >
+                      <div className={styles.historyTaskHeader}>
+                        <button
+                          className={styles.historyTaskCardButton}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleTaskSelect(task.id);
+                          }}
+                        >
                           <strong>{task.topic}</strong>
-                          <span className={styles.historyTaskStatus}>{task.status}</span>
-                        </div>
-                        <div className={styles.historyTaskMeta}>
-                          <span>{task.reference_mode ?? '未记录参考模式'}</span>
-                          <span>{formatHistoryDate(task.created_at)}</span>
-                        </div>
-                      </button>
-
-                      {isArmed ? (
-                        <div className={styles.deleteInlineWarning}>
-                          <div>删除后会立即移除该任务及其所有文案版本、图片计划、图片资产和相关记录。</div>
-                          <div className={styles.historyTaskActions}>
-                            <button
-                              type="button"
-                              className={styles.subtleButton}
-                              onClick={handleDeleteCancel}
-                              disabled={Boolean(deleteState.pendingTaskId)}
-                            >
-                              取消
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.dangerButton}
-                              onClick={() => handleDeleteModalOpen(task.id)}
-                              disabled={Boolean(deleteState.pendingTaskId)}
-                            >
-                              {isPendingDelete ? '删除中…' : '继续删除'}
-                            </button>
+                          <div className={styles.historyTaskMeta}>
+                            <span>{task.reference_mode ?? '未记录参考模式'}</span>
+                            <span>{formatHistoryDate(task.created_at)}</span>
                           </div>
-                        </div>
-                      ) : (
-                        <div className={styles.historyTaskActions}>
+                        </button>
+
+                        <div className={styles.historyTaskHeaderActions}>
+                          <span className={styles.historyTaskStatus}>{task.status}</span>
                           <button
                             type="button"
                             className={styles.deleteButton}
-                            onClick={() => handleDeleteArm(task.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteModalOpen(task.id);
+                            }}
                             disabled={!task.can_delete || Boolean(deleteState.pendingTaskId)}
                             title={task.can_delete ? '永久删除该任务' : '当前任务不可删除'}
                           >
                             删除任务
                           </button>
                         </div>
-                      )}
+                      </div>
                     </article>
                   );
                 })}
@@ -317,12 +294,26 @@ function HistoryPageClient() {
 
       <ConfirmationDialog
         open={Boolean(modalTask)}
-        title="永久删除任务"
+        title="确认永久删除"
         description={modalTask ? (
           <div className={styles.modalCopy}>
-            <p><strong>{modalTask.topic}</strong></p>
-            <p>该任务及其所有生成版本、图片计划、图片资产和事件记录都会被彻底移除。</p>
-            <p>这是不可撤销操作，请确认你要继续。</p>
+            <span className={styles.modalEyebrow}>Danger Zone</span>
+            <div className={styles.modalTaskCard}>
+              <span className={styles.modalTaskLabel}>目标任务</span>
+              <strong className={styles.modalTaskName}>{modalTask.topic}</strong>
+              <span className={styles.modalTaskMeta}>
+                {modalTask.reference_mode ?? '未记录参考模式'}
+                {' · '}
+                {formatHistoryDate(modalTask.created_at)}
+              </span>
+            </div>
+            <p className={styles.modalDangerLead}>删除后会永久移除以下内容：</p>
+            <ul className={styles.modalImpactList}>
+              <li>任务输入、参考分配和策略快照</li>
+              <li>全部文案版本与历史输出记录</li>
+              <li>图片计划、图片资产和相关事件日志</li>
+            </ul>
+            <p className={styles.modalWarningText}>这是不可撤销操作，请确认你要继续。</p>
             {deleteState.errorMessage ? (
               <span className={styles.errorBox}>{deleteState.errorMessage}</span>
             ) : null}

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'xhs-pilot-shell-v1';
+const CACHE_NAME = 'xhs-pilot-shell-v2';
 const OFFLINE_URL = '/offline';
 const SHELL_ASSETS = [
   '/',
@@ -35,6 +35,10 @@ self.addEventListener('fetch', (event) => {
 
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
+  if (requestUrl.pathname.startsWith('/api/')) {
     return;
   }
 

@@ -1,14 +1,12 @@
 import type { HistoryTaskSummary } from '@/app/create/state';
 
 export interface HistoryDeleteState {
-  armedTaskId: string | null;
   modalTaskId: string | null;
   pendingTaskId: string | null;
   errorMessage: string | null;
 }
 
 export type HistoryDeleteAction =
-  | { type: 'delete_armed'; taskId: string }
   | { type: 'delete_cancelled' }
   | { type: 'delete_modal_opened'; taskId: string }
   | { type: 'delete_requested'; taskId: string }
@@ -17,7 +15,6 @@ export type HistoryDeleteAction =
 
 export function createInitialHistoryDeleteState(): HistoryDeleteState {
   return {
-    armedTaskId: null,
     modalTaskId: null,
     pendingTaskId: null,
     errorMessage: null,
@@ -29,16 +26,8 @@ export function reduceHistoryDeleteState(
   action: HistoryDeleteAction,
 ): HistoryDeleteState {
   switch (action.type) {
-    case 'delete_armed':
-      return {
-        armedTaskId: action.taskId,
-        modalTaskId: null,
-        pendingTaskId: null,
-        errorMessage: null,
-      };
     case 'delete_cancelled':
       return {
-        armedTaskId: null,
         modalTaskId: null,
         pendingTaskId: null,
         errorMessage: null,
@@ -46,7 +35,6 @@ export function reduceHistoryDeleteState(
     case 'delete_modal_opened':
       return {
         ...state,
-        armedTaskId: action.taskId,
         modalTaskId: action.taskId,
         errorMessage: null,
       };

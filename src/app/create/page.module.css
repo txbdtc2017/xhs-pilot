@@ -481,6 +481,28 @@
   align-items: start;
 }
 
+.historyTaskCard {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 252, 247, 0.96);
+  cursor: pointer;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.historyTaskCard:hover {
+  border-color: rgba(180, 35, 53, 0.28);
+  transform: translateY(-1px);
+}
+
+.historyTaskCardActive {
+  border-color: rgba(180, 35, 53, 0.34);
+  box-shadow: 0 10px 24px rgba(46, 31, 20, 0.08);
+  background: linear-gradient(180deg, rgba(253, 247, 242, 0.98), rgba(255, 252, 247, 0.98));
+}
+
 .historyTaskButton {
   display: grid;
   gap: 8px;
@@ -503,16 +525,29 @@
   background: linear-gradient(180deg, rgba(253, 247, 242, 0.98), rgba(255, 252, 247, 0.98));
 }
 
-.historyTaskCard {
+.historyTaskCardButton {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
 }
 
 .historyTaskHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 12px;
+}
+
+.historyTaskHeaderActions {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
 }
 
 .historyTaskStatus {
@@ -533,18 +568,6 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-}
-
-.deleteInlineWarning {
-  display: grid;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(179, 59, 69, 0.2);
-  background: rgba(179, 59, 69, 0.06);
-  color: var(--color-text-primary);
-  font-size: 13px;
-  line-height: 1.55;
 }
 
 .errorBox {
@@ -612,31 +635,124 @@
 }
 
 .modalCard {
+  position: relative;
+  overflow: hidden;
   width: min(100%, 520px);
   border-radius: 24px;
-  border: 1px solid rgba(78, 61, 45, 0.14);
-  background: linear-gradient(180deg, rgba(255, 253, 249, 0.98), rgba(249, 243, 236, 0.98));
-  box-shadow: 0 24px 64px rgba(26, 18, 12, 0.2);
+  border: 1px solid rgba(115, 39, 40, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(179, 59, 69, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 253, 249, 0.99), rgba(247, 240, 233, 0.99));
+  box-shadow: 0 28px 72px rgba(26, 18, 12, 0.26);
+}
+
+.modalCard::before {
+  content: '';
+  display: block;
+  height: 4px;
+  background: linear-gradient(90deg, rgba(179, 59, 69, 0.95), rgba(126, 41, 47, 0.64));
 }
 
 .modalBody {
   display: grid;
-  gap: 12px;
-  padding: 24px 24px 18px;
+  gap: 14px;
+  padding: 24px 24px 20px;
+}
+
+.modalBody h2 {
+  font-family: var(--font-family-display);
+  font-size: 1.6rem;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--create-heading-color);
 }
 
 .modalCopy {
   display: grid;
-  gap: 10px;
+  gap: 14px;
   color: var(--color-text-secondary);
   line-height: 1.6;
+}
+
+.modalEyebrow {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(179, 59, 69, 0.1);
+  color: var(--color-error);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.modalTaskCard {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(115, 39, 40, 0.14);
+  background: rgba(255, 250, 246, 0.82);
+}
+
+.modalTaskLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.modalTaskName {
+  color: var(--create-heading-color);
+  font-size: 1rem;
+}
+
+.modalTaskMeta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.modalDangerLead {
+  color: var(--create-heading-color);
+  font-weight: 700;
+}
+
+.modalImpactList {
+  display: grid;
+  gap: 8px;
+}
+
+.modalImpactList li {
+  position: relative;
+  padding-left: 16px;
+}
+
+.modalImpactList li::before {
+  content: '';
+  position: absolute;
+  top: 0.72em;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(179, 59, 69, 0.9);
+}
+
+.modalWarningText {
+  color: var(--color-text-primary);
+  font-weight: 600;
 }
 
 .modalActions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  padding: 0 24px 24px;
+  padding: 16px 24px 24px;
+  border-top: 1px solid rgba(78, 61, 45, 0.08);
+  background: rgba(255, 252, 247, 0.72);
 }
 
 .versionTabs {
@@ -796,11 +912,18 @@
     flex-direction: column;
   }
 
-  .historyTaskHeader,
   .referenceMeta,
   .imagePageHeader {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .historyTaskHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .historyTaskHeaderActions {
+    justify-items: stretch;
   }
 
   .submitButton {
@@ -819,7 +942,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .historyTaskCard,
   .historyTaskButton,
+  .historyTaskCardButton,
   .submitButton,
   .secondaryButton,
   .subtleButton,

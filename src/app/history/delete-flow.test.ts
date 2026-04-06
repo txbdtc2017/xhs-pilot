@@ -7,25 +7,16 @@ import {
   reduceHistoryDeleteState,
 } from './delete-flow';
 
-test('delete flow arms a row before opening the final confirmation modal', () => {
+test('delete flow opens the confirmation modal immediately when a row delete action is triggered', () => {
   let state = createInitialHistoryDeleteState();
-
-  state = reduceHistoryDeleteState(state, {
-    type: 'delete_armed',
-    taskId: 'task-2',
-  });
-
-  assert.equal(state.armedTaskId, 'task-2');
-  assert.equal(state.modalTaskId, null);
-  assert.equal(state.pendingTaskId, null);
 
   state = reduceHistoryDeleteState(state, {
     type: 'delete_modal_opened',
     taskId: 'task-2',
   });
 
-  assert.equal(state.armedTaskId, 'task-2');
   assert.equal(state.modalTaskId, 'task-2');
+  assert.equal(state.pendingTaskId, null);
 });
 
 test('applyHistoryTaskDeletion selects the next remaining task after deleting the current selection', () => {

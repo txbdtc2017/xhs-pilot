@@ -19,6 +19,33 @@ export interface ImagePlanResult {
   pages: ImagePlanPageResult[];
 }
 
+export function isImagePlanResult(value: unknown): value is ImagePlanResult {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.system_decision_summary !== 'string' || !Array.isArray(record.pages)) {
+    return false;
+  }
+
+  return record.pages.every((page) => {
+    if (!page || typeof page !== 'object') {
+      return false;
+    }
+
+    const pageRecord = page as Record<string, unknown>;
+    return Number.isInteger(pageRecord.sort_order)
+      && (pageRecord.page_role === 'cover' || pageRecord.page_role === 'body')
+      && typeof pageRecord.content_purpose === 'string'
+      && typeof pageRecord.source_excerpt === 'string'
+      && (pageRecord.visual_type === 'info-card' || pageRecord.visual_type === 'scene')
+      && typeof pageRecord.style_reason === 'string'
+      && typeof pageRecord.prompt_summary === 'string'
+      && typeof pageRecord.prompt_text === 'string';
+  });
+}
+
 export const imagePlanSchema: JSONSchema7 = {
   type: 'object',
   properties: {

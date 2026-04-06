@@ -149,3 +149,128 @@ test('hardDeleteTask rejects terminal tasks that still have active image jobs', 
 
   assert.deepEqual(result, { code: 'image_job_active' });
 });
+
+test('getTaskHistory reconciles stale running tasks to failed and unlocks deletion', async () => {
+  const calls: Array<{ kind: 'query' | 'queryOne'; text: string; params?: unknown[] }> = [];
+  const repository = createGenerationRepository({
+    query: async <T>(text: string, params?: unknown[]) => {
+      calls.push({ kind: 'query', text, params });
+
+      if (text.includes('FROM generation_tasks gt')) {
+        return [
+          {
+            id: 'task-stale',
+            topic: '卡死任务',
+            status: 'running',
+            reference_mode: 'referenced',
+            created_at: '2026-04-04T10:00:00.000Z',
+            current_step: 'generating',
+            started_at: '2026-04-04T10:00:00.000Z',
+            last_progress_at: '2026-04-04T10:00:00.000Z',
+            last_heartbeat_at: '2026-04-04T10:00:00.000Z',
+            stalled_at: null,
+            failed_at: null,
+            stalled_reason: null,
+            failure_reason: null,
+            has_active_image_jobs: false,
+          },
+        ] as T[];
+      }
+
+      return [] as T[];
+    },
+    queryOne: async <T>(text: string, params?: unknown[]) => {
+      calls.push({ kind: 'queryOne', text, params });
+
+      if (text.includes('COUNT(*)::int AS total')) {
+        return { total: 1 } as T;
+      }
+
+      return null;
+    },
+    imageGenerationRepository: {
+      listOutputVersions: async () => [],
+      getLatestImagePlanForOutput: async () => null,
+      getActiveImageJob: async () => null,
+    },
+    now: () => '2026-04-04T10:05:01.000Z',
+  });
+
+  const result = await repository.getTaskHistory({ page: 1, limit: 8 });
+
+  assert.deepEqual(result, {
+    tasks: [
+      {
+        id: 'task-stale',
+        topic: '卡死任务',
+        status: 'failed',
+        reference_mode: 'referenced',
+        created_at: '2026-04-04T10:00:00.000Z',
+        can_delete: true,
+      },
+    ],
+    total: 1,
+  });
+  assert.equal(
+    calls.some(
+      ({ text, params }) =>
+        text.includes('UPDATE generation_tasks')
+        && params?.[0] === 'task-stale'
+        && params?.[1] === 'failed',
+    ),
+    true,
+  );
+});
+
+test('hardDeleteTask reconciles stale running tasks before applying the delete guard', async () => {
+  const calls: Array<{ kind: 'query' | 'queryOne'; text: string; params?: unknown[] }> = [];
+  const repository = createGenerationRepository({
+    query: async <T>(text: string, params?: unknown[]) => {
+      calls.push({ kind: 'query', text, params });
+      return [] as T[];
+    },
+    queryOne: async <T>(text: string, params?: unknown[]) => {
+      calls.push({ kind: 'queryOne', text, params });
+
+      if (text.includes('FROM generation_tasks gt')) {
+        return {
+          task_status: 'running',
+          current_step: 'generating',
+          started_at: '2026-04-04T10:00:00.000Z',
+          last_progress_at: '2026-04-04T10:00:00.000Z',
+          last_heartbeat_at: '2026-04-04T10:00:00.000Z',
+          stalled_at: null,
+          failed_at: null,
+          stalled_reason: null,
+          failure_reason: null,
+          active_image_job_status: null,
+        } as T;
+      }
+
+      if (text.includes('DELETE FROM generation_tasks')) {
+        return { id: 'task-stale' } as T;
+      }
+
+      return null;
+    },
+    imageGenerationRepository: {
+      listOutputVersions: async () => [],
+      getLatestImagePlanForOutput: async () => null,
+      getActiveImageJob: async () => null,
+    },
+    now: () => '2026-04-04T10:05:01.000Z',
+  });
+
+  const result = await repository.hardDeleteTask('task-stale');
+
+  assert.deepEqual(result, { code: 'deleted' });
+  assert.equal(
+    calls.some(
+      ({ text, params }) =>
+        text.includes('UPDATE generation_tasks')
+        && params?.[0] === 'task-stale'
+        && params?.[1] === 'failed',
+    ),
+    true,
+  );
+});

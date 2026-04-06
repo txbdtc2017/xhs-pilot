@@ -60,13 +60,23 @@ export function ConfirmationDialog({
   }
 
   return (
-    <div className={classes?.backdrop}>
+    <div
+      className={classes?.backdrop}
+      onClick={() => {
+        if (!isConfirming) {
+          onCancel();
+        }
+      }}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         className={classes?.dialog}
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
       >
         <div className={classes?.body}>
           <h2 id={titleId}>{title}</h2>

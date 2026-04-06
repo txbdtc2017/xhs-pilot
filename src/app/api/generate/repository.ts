@@ -2,7 +2,12 @@ import { query, queryOne } from '@/lib/db';
 import type { GenerationOutput } from '@/agents/generation';
 import type { StrategyResult } from '@/agents/schemas/strategy';
 import type { TaskInput, TaskReferencesSelection } from '@/agents/strategy';
-import type { TaskRuntimePayload } from '@/lib/generation-lifecycle';
+import {
+  getGenerationStepThresholds,
+  type GenerationLifecycleState,
+  type GenerationStep,
+  type TaskRuntimePayload,
+} from '@/lib/generation-lifecycle';
 import { imageGenerationRepository, type ImageGenerationJobRow, type ImagePlanDetail, type OutputVersionSummary } from '@/app/api/image-generation/repository';
 
 type QueryResult<T> = Promise<T[]>;
@@ -57,12 +62,54 @@ export interface GenerationRepositoryDependencies {
   query: <T>(text: string, params?: unknown[]) => QueryResult<T>;
   queryOne: <T>(text: string, params?: unknown[]) => QueryOneResult<T>;
   imageGenerationRepository: ImageGenerationRepositoryLike;
+  now?: () => string;
 }
 
 interface TaskDeleteGuardRow {
+  current_step: string | null;
+  started_at: string | null;
+  last_progress_at: string | null;
+  last_heartbeat_at: string | null;
+  stalled_at: string | null;
+  failed_at: string | null;
+  stalled_reason: string | null;
+  failure_reason: string | null;
   task_status: string;
   active_image_job_status: string | null;
 }
+
+type ReconciliableTaskRuntimeRow = Pick<
+  TaskRow,
+  | 'id'
+  | 'status'
+  | 'current_step'
+  | 'started_at'
+  | 'last_progress_at'
+  | 'last_heartbeat_at'
+  | 'stalled_at'
+  | 'failed_at'
+  | 'stalled_reason'
+  | 'failure_reason'
+>;
+
+type TaskHistoryQueryRow = Pick<
+  TaskRow,
+  | 'id'
+  | 'topic'
+  | 'status'
+  | 'reference_mode'
+  | 'created_at'
+  | 'current_step'
+  | 'started_at'
+  | 'last_progress_at'
+  | 'last_heartbeat_at'
+  | 'stalled_at'
+  | 'failed_at'
+  | 'stalled_reason'
+  | 'failure_reason'
+> & {
+  has_active_image_jobs: boolean;
+};
 
 type TaskHistorySummaryRow = Pick<
   TaskRow,
@@ -82,7 +129,204 @@ function createDefaultGenerationRepositoryDependencies(): GenerationRepositoryDe
     query,
     queryOne,
     imageGenerationRepository,
+    now: () => new Date().toISOString(),
   };
+}
+
+function isGenerationStep(value: string | null): value is GenerationStep {
+  return value === 'understanding'
+    || value === 'searching'
+    || value === 'strategizing'
+    || value === 'generating'
+    || value === 'persisting';
+}
+
+function elapsedMs(from: string | null, to: string): number {
+  if (!from) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return Math.max(0, Date.parse(to) - Date.parse(from));
+}
+
+function toTaskRuntimePayload(input: {
+  status: string;
+  current_step: string | null;
+  started_at: string | null;
+  last_progress_at: string | null;
+  last_heartbeat_at: string | null;
+  stalled_at: string | null;
+  failed_at: string | null;
+  stalled_reason: string | null;
+  failure_reason: string | null;
+}): TaskRuntimePayload {
+  return {
+    lifecycle_state: input.status as GenerationLifecycleState,
+    current_step: input.current_step as TaskRuntimePayload['current_step'],
+    started_at: input.started_at,
+    last_progress_at: input.last_progress_at,
+    last_heartbeat_at: input.last_heartbeat_at,
+    stalled_at: input.stalled_at,
+    failed_at: input.failed_at,
+    stalled_reason: input.stalled_reason,
+    failure_reason: input.failure_reason,
+  };
+}
+
+function reconcileTaskRuntimePayload(
+  runtime: TaskRuntimePayload,
+  now: string,
+): TaskRuntimePayload {
+  if (
+    (runtime.lifecycle_state !== 'running' && runtime.lifecycle_state !== 'stalled')
+    || !isGenerationStep(runtime.current_step)
+  ) {
+    return runtime;
+  }
+
+  const step = runtime.current_step;
+  const thresholds = getGenerationStepThresholds(step);
+  const quietElapsed = elapsedMs(runtime.last_progress_at ?? runtime.started_at, now);
+  const heartbeatElapsed = elapsedMs(runtime.last_heartbeat_at ?? runtime.started_at, now);
+
+  if (heartbeatElapsed > thresholds.deadMs) {
+    return {
+      ...runtime,
+      lifecycle_state: 'failed',
+      failed_at: now,
+      failure_reason: `${step} 阶段超过心跳 dead threshold，未收到 heartbeat，任务已判定失败。`,
+      last_heartbeat_at: now,
+    };
+  }
+
+  if (runtime.lifecycle_state === 'stalled') {
+    const stalledElapsed = elapsedMs(runtime.stalled_at, now);
+    if (stalledElapsed > thresholds.deadMs) {
+      return {
+        ...runtime,
+        lifecycle_state: 'failed',
+        failed_at: now,
+        failure_reason: `${step} 阶段 stalled 持续超过 dead threshold，任务已判定失败。`,
+        last_heartbeat_at: now,
+      };
+    }
+
+    return runtime;
+  }
+
+  if (quietElapsed > thresholds.stallMs) {
+    return {
+      ...runtime,
+      lifecycle_state: 'stalled',
+      stalled_at: now,
+      stalled_reason: `${step} 阶段超过允许的无进展窗口`,
+    };
+  }
+
+  return runtime;
+}
+
+function buildReconciledRuntimePatch(
+  original: TaskRuntimePayload,
+  reconciled: TaskRuntimePayload,
+): UpdateTaskPatch | null {
+  if (original.lifecycle_state === reconciled.lifecycle_state) {
+    return null;
+  }
+
+  return {
+    status: reconciled.lifecycle_state,
+    lastHeartbeatAt: reconciled.last_heartbeat_at,
+    stalledAt: reconciled.stalled_at,
+    failedAt: reconciled.failed_at,
+    stalledReason: reconciled.stalled_reason,
+    failureReason: reconciled.failure_reason,
+  };
+}
+
+async function updateTaskWith(
+  dependencies: GenerationRepositoryDependencies,
+  taskId: string,
+  patch: UpdateTaskPatch,
+): Promise<void> {
+  const assignments: string[] = [];
+  const values: unknown[] = [taskId];
+
+  const appendAssignment = (column: string, value: unknown) => {
+    values.push(value);
+    assignments.push(`${column} = $${values.length}`);
+  };
+
+  if (patch.status !== undefined) {
+    appendAssignment('status', patch.status);
+  }
+
+  if (patch.currentStep !== undefined) {
+    appendAssignment('current_step', patch.currentStep);
+  }
+
+  if (patch.referenceMode !== undefined) {
+    appendAssignment('reference_mode', patch.referenceMode);
+  }
+
+  if (patch.startedAt !== undefined) {
+    appendAssignment('started_at', patch.startedAt);
+  }
+
+  if (patch.lastProgressAt !== undefined) {
+    appendAssignment('last_progress_at', patch.lastProgressAt);
+  }
+
+  if (patch.lastHeartbeatAt !== undefined) {
+    appendAssignment('last_heartbeat_at', patch.lastHeartbeatAt);
+  }
+
+  if (patch.stalledAt !== undefined) {
+    appendAssignment('stalled_at', patch.stalledAt);
+  }
+
+  if (patch.failedAt !== undefined) {
+    appendAssignment('failed_at', patch.failedAt);
+  }
+
+  if (patch.stalledReason !== undefined) {
+    appendAssignment('stalled_reason', patch.stalledReason);
+  }
+
+  if (patch.failureReason !== undefined) {
+    appendAssignment('failure_reason', patch.failureReason);
+  }
+
+  if (assignments.length === 0) {
+    return;
+  }
+
+  await dependencies.query(
+    `
+      UPDATE generation_tasks
+      SET ${assignments.join(', ')}
+      WHERE id = $1
+    `,
+    values,
+  );
+}
+
+async function reconcileTaskRuntimeWith(
+  dependencies: GenerationRepositoryDependencies,
+  row: ReconciliableTaskRuntimeRow,
+): Promise<TaskRuntimePayload> {
+  const runtime = toTaskRuntimePayload(row);
+  const reconciled = reconcileTaskRuntimePayload(
+    runtime,
+    (dependencies.now ?? (() => new Date().toISOString()))(),
+  );
+  const patch = buildReconciledRuntimePatch(runtime, reconciled);
+
+  if (patch) {
+    await updateTaskWith(dependencies, row.id, patch);
+  }
+
+  return reconciled;
 }
 
 export async function createTask(input: TaskInput): Promise<{ id: string }> {
@@ -291,7 +535,7 @@ async function getTaskHistoryWith(
   const totalRow = await dependencies.queryOne<{ total: number }>(
     `SELECT COUNT(*)::int AS total FROM generation_tasks`,
   );
-  const tasks = await dependencies.query<TaskHistorySummaryRow>(
+  const tasks = await dependencies.query<TaskHistoryQueryRow>(
     `
       SELECT
         gt.id,
@@ -299,18 +543,22 @@ async function getTaskHistoryWith(
         gt.status,
         gt.reference_mode,
         gt.created_at,
-        CASE
-          WHEN gt.status NOT IN ('completed', 'failed') THEN FALSE
-          WHEN EXISTS (
-            SELECT 1
-            FROM generation_outputs go
-            INNER JOIN image_plans ip ON ip.output_id = go.id
-            INNER JOIN image_generation_jobs jobs ON jobs.plan_id = ip.id
-            WHERE go.task_id = gt.id
-              AND jobs.status IN ('queued', 'running')
-          ) THEN FALSE
-          ELSE TRUE
-        END AS can_delete
+        gt.current_step,
+        gt.started_at,
+        gt.last_progress_at,
+        gt.last_heartbeat_at,
+        gt.stalled_at,
+        gt.failed_at,
+        gt.stalled_reason,
+        gt.failure_reason,
+        EXISTS (
+          SELECT 1
+          FROM generation_outputs go
+          INNER JOIN image_plans ip ON ip.output_id = go.id
+          INNER JOIN image_generation_jobs jobs ON jobs.plan_id = ip.id
+          WHERE go.task_id = gt.id
+            AND jobs.status IN ('queued', 'running')
+        ) AS has_active_image_jobs
       FROM generation_tasks gt
       ORDER BY created_at DESC
       LIMIT $1 OFFSET $2
@@ -318,8 +566,23 @@ async function getTaskHistoryWith(
     [limit, offset],
   );
 
+  const summaries: TaskHistorySummaryRow[] = [];
+  for (const task of tasks) {
+    const runtime = await reconcileTaskRuntimeWith(dependencies, task);
+    const lifecycleState = runtime.lifecycle_state;
+
+    summaries.push({
+      id: task.id,
+      topic: task.topic,
+      status: lifecycleState,
+      reference_mode: task.reference_mode,
+      created_at: task.created_at,
+      can_delete: ['completed', 'failed'].includes(lifecycleState) && !task.has_active_image_jobs,
+    });
+  }
+
   return {
-    tasks,
+    tasks: summaries,
     total: totalRow?.total ?? 0,
   };
 }
@@ -372,6 +635,14 @@ async function getTaskDetailWith(
   if (!task) {
     return null;
   }
+
+  const runtime = await reconcileTaskRuntimeWith(dependencies, task);
+  task.status = runtime.lifecycle_state;
+  task.last_heartbeat_at = runtime.last_heartbeat_at;
+  task.stalled_at = runtime.stalled_at;
+  task.failed_at = runtime.failed_at;
+  task.stalled_reason = runtime.stalled_reason;
+  task.failure_reason = runtime.failure_reason;
 
   const strategy = await dependencies.queryOne<Record<string, unknown>>(
     `
@@ -460,18 +731,6 @@ async function getTaskDetailWith(
     [taskId],
   );
 
-  const runtime: TaskRuntimePayload = {
-    lifecycle_state: task.status as TaskRuntimePayload['lifecycle_state'],
-    current_step: task.current_step as TaskRuntimePayload['current_step'],
-    started_at: task.started_at,
-    last_progress_at: task.last_progress_at,
-    last_heartbeat_at: task.last_heartbeat_at,
-    stalled_at: task.stalled_at,
-    failed_at: task.failed_at,
-    stalled_reason: task.stalled_reason,
-    failure_reason: task.failure_reason,
-  };
-
   return {
     task,
     runtime,
@@ -495,6 +754,14 @@ async function hardDeleteTaskWith(
     `
       SELECT
         gt.status AS task_status,
+        gt.current_step,
+        gt.started_at,
+        gt.last_progress_at,
+        gt.last_heartbeat_at,
+        gt.stalled_at,
+        gt.failed_at,
+        gt.stalled_reason,
+        gt.failure_reason,
         (
           SELECT jobs.status
           FROM generation_outputs go
@@ -515,7 +782,20 @@ async function hardDeleteTaskWith(
     return { code: 'not_found' };
   }
 
-  if (!['completed', 'failed'].includes(guard.task_status)) {
+  const runtime = await reconcileTaskRuntimeWith(dependencies, {
+    id: taskId,
+    status: guard.task_status,
+    current_step: guard.current_step,
+    started_at: guard.started_at,
+    last_progress_at: guard.last_progress_at,
+    last_heartbeat_at: guard.last_heartbeat_at,
+    stalled_at: guard.stalled_at,
+    failed_at: guard.failed_at,
+    stalled_reason: guard.stalled_reason,
+    failure_reason: guard.failure_reason,
+  });
+
+  if (!['completed', 'failed'].includes(runtime.lifecycle_state)) {
     return { code: 'task_active' };
   }
 
